@@ -1,0 +1,159 @@
+diff --git a/sources/dfmc/llvm-back-end/llvm-targets.dylan b/sources/dfmc/llvm-back-end/llvm-targets.dylan
+index b6acc38..3ef3cfa 100644
+--- a/sources/dfmc/llvm-back-end/llvm-targets.dylan
++++ b/sources/dfmc/llvm-back-end/llvm-targets.dylan
+@@ -187,6 +187,35 @@ define method llvm-back-end-calling-convention-fast
+ end method;
+ 
+ 
++// wasm32
++
++define abstract class <llvm-wasm32-back-end> (<llvm-back-end>)
++end class;
++
++define method back-end-word-size
++    (back-end :: <llvm-wasm32-back-end>)
++ => (number-bytes :: <integer>)
++  4
++end method back-end-word-size;
++
++define method llvm-back-end-data-layout
++    (back-end :: <llvm-wasm32-back-end>) => (layout :: <string>);
++  "e-m:e-p:32:32-p10:8:8-p20:8:8-i64:64-i128:128-n32:64-S128-ni:1:10:20"
++end method;
++
++define method llvm-back-end-unwind-exception-size
++    (back-end :: <llvm-wasm32-back-end>)
++ => (number-words :: <integer>)
++  8
++end method;
++
++define method llvm-back-end-unwind-exception-alignment
++    (back-end :: <llvm-wasm32-back-end>)
++ => (alignment-bytes :: <integer>)
++  16
++end method;
++
++
+ /// Concrete LLVM back-end subclasses
+ 
+ // x86-windows
+@@ -327,6 +356,20 @@ define method llvm-back-end-target-triple
+ end method;
+ 
+ 
++// wasm32-wasi
++
++define class <llvm-wasm32-wasi-back-end> (<llvm-wasm32-back-end>,
++                                          <llvm-unix-back-end>)
++end class;
++
++register-back-end(<llvm-wasm32-wasi-back-end>, #"llvm", #"wasm32-wasi");
++
++define method llvm-back-end-target-triple
++    (back-end :: <llvm-wasm32-wasi-back-end>) => (triple :: <string>);
++  "wasm32-unknown-wasi"
++end method;
++
++
+ /// LLVM Thread-local storage platform support
+ 
+ define method llvm-runtime-thread-local-support?
+diff --git a/sources/jamfiles/shared-darwin-build.jam b/sources/jamfiles/shared-darwin-build.jam
+index bbfc788..2673b35 100644
+--- a/sources/jamfiles/shared-darwin-build.jam
++++ b/sources/jamfiles/shared-darwin-build.jam
+@@ -26,17 +26,20 @@ include $(SYSTEM_BUILD_SCRIPTS)/posix-build.jam ;
+ actions together LinkDLL bind NEEDLIBS {
+   $(LINK) -dynamiclib -o $(<:Q) -install_name @rpath/$(<:BS=$(SUFDLL)) $(LINKFLAGS) $(>:Q) -L"$(LIBPATH)" $(NEEDLIBS:Q) $(LINKLIBS) &&
+   $(DSYMUTIL) $(<:Q) &&
+-  $(STRIP) -S $(<:Q)
++  $(STRIP) -S $(<:Q) &&
++  /usr/bin/codesign -s - -f $(<:Q)
+ }
+ 
+ actions LinkEXE bind NEEDLIBS {
+   $(LINK) -o $(<:Q) $(LINKFLAGS) $(>:Q) -L"$(LIBPATH)" $(NEEDLIBS:Q) $(LINKLIBS) &&
+   $(DSYMUTIL) $(<:Q) &&
+-  $(STRIP) -S $(<:Q)
++  $(STRIP) -S $(<:Q) &&
++  /usr/bin/codesign -s - -f $(<:Q)
+ }
+ 
+ actions UnifyEXE bind NEEDLIBS {
+   $(UNIFYLINK) -o $(<:Q) $(LINKFLAGS) $(>:Q) -L"$(LIBPATH)" $(NEEDLIBS:Q) $(LINKLIBS) &&
+   $(DSYMUTIL) $(<:Q) &&
+-  $(STRIP) -S $(<:Q)
++  $(STRIP) -S $(<:Q) &&
++  /usr/bin/codesign -s - -f $(<:Q)
+ }
+diff --git a/sources/jamfiles/wasm32-wasi-build.jam b/sources/jamfiles/wasm32-wasi-build.jam
+new file mode 100644
+index 0000000..446cacc
+--- /dev/null
++++ b/sources/jamfiles/wasm32-wasi-build.jam
+@@ -0,0 +1,8 @@
++#
++# WebAssembly (wasm32-wasi) build script — experimental
++#
++include $(SYSTEM_BUILD_SCRIPTS)/config.jam ;
++
++CCFLAGS  += -DOPEN_DYLAN_PLATFORM_UNIX -DOPEN_DYLAN_ARCH_WASM32 ;
++
++include $(SYSTEM_BUILD_SCRIPTS)/posix-build.jam ;
+diff --git a/sources/registry/wasm32-wasi/common-dylan b/sources/registry/wasm32-wasi/common-dylan
+new file mode 100644
+index 0000000..045c0be
+--- /dev/null
++++ b/sources/registry/wasm32-wasi/common-dylan
+@@ -0,0 +1 @@
++abstract://dylan/common-dylan/linux-common-dylan.lid
+diff --git a/sources/registry/wasm32-wasi/dood b/sources/registry/wasm32-wasi/dood
+new file mode 100644
+index 0000000..466a24e
+--- /dev/null
++++ b/sources/registry/wasm32-wasi/dood
+@@ -0,0 +1 @@
++abstract://dylan/lib/dood/dood.lid
+diff --git a/sources/registry/wasm32-wasi/duim b/sources/registry/wasm32-wasi/duim
+new file mode 100644
+index 0000000..320bb87
+--- /dev/null
++++ b/sources/registry/wasm32-wasi/duim
+@@ -0,0 +1 @@
++abstract://dylan/duim/gtk/duim.lid
+diff --git a/sources/registry/wasm32-wasi/io b/sources/registry/wasm32-wasi/io
+new file mode 100644
+index 0000000..ac15d2e
+--- /dev/null
++++ b/sources/registry/wasm32-wasi/io
+@@ -0,0 +1 @@
++abstract://dylan/io/unix-io.lid
+diff --git a/sources/registry/wasm32-wasi/jam b/sources/registry/wasm32-wasi/jam
+new file mode 100644
+index 0000000..2aaabc3
+--- /dev/null
++++ b/sources/registry/wasm32-wasi/jam
+@@ -0,0 +1 @@
++abstract://dylan/lib/jam/unix-jam.lid
+diff --git a/sources/registry/wasm32-wasi/network b/sources/registry/wasm32-wasi/network
+new file mode 100644
+index 0000000..c745d89
+--- /dev/null
++++ b/sources/registry/wasm32-wasi/network
+@@ -0,0 +1 @@
++abstract://dylan/network/linux-network.lid
+diff --git a/sources/registry/wasm32-wasi/ssl-network b/sources/registry/wasm32-wasi/ssl-network
+new file mode 100644
+index 0000000..60adec7
+--- /dev/null
++++ b/sources/registry/wasm32-wasi/ssl-network
+@@ -0,0 +1 @@
++abstract://dylan/lib/ssl/ssl.lid
+diff --git a/sources/registry/wasm32-wasi/system b/sources/registry/wasm32-wasi/system
+new file mode 100644
+index 0000000..df72ec5
+--- /dev/null
++++ b/sources/registry/wasm32-wasi/system
+@@ -0,0 +1 @@
++abstract://dylan/system/aarch64-linux-system.lid

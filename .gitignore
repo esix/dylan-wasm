@@ -1,0 +1,15 @@
+# Externally obtained trees — not vendored. See README.md to reproduce.
+# (our changes to opendylan live in patches/)
+/opendylan/
+/bootstrap/
+/install/
+*.tar.bz2
+
+# Build outputs
+_build/
+_build-wasm/
+hello/_build/
+
+# Editor / OS cruft
+.DS_Store
+*.swp
