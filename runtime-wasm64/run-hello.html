@@ -1,0 +1,38 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Dylan → wasm64 hello</title>
+<pre id="out">[loading…]</pre>
+<script type="module">
+const out = document.getElementById('out');
+const log = (s) => { out.textContent += s; console.log('[dylan] ' + s.replace(/\n$/, '')); };
+let memory;
+const dec = new TextDecoder();
+const imports = {
+  env: {
+    // long host_write(int fd, const void *buf, unsigned long count) — memory64: BigInt args
+    host_write(fd, ptr, len) {
+      const s = dec.decode(new Uint8Array(memory.buffer, Number(ptr), Number(len)));
+      log(s);
+      return BigInt(Number(len));
+    },
+  },
+};
+try {
+  out.textContent = '';
+  const buf = await (await fetch('hello.wasm')).arrayBuffer();
+  const { instance } = await WebAssembly.instantiate(buf, imports);
+  const e = instance.exports;
+  memory = e.memory;
+  console.log('[harness] memory64=' + (memory.buffer.byteLength >= 0) +
+              ' have main=' + !!e.main + ' ctors=' + !!e.__wasm_call_ctors);
+  e.__wasm_call_ctors?.();
+  e._Init_Run_Time?.();
+  const rc = e.main?.(0, 0n);
+  console.log('[harness] main returned: ' + rc);
+  document.title = 'DONE';
+} catch (err) {
+  console.log('[harness] ERROR: ' + err);
+  out.textContent += '\n[harness] ERROR: ' + err + '\n' + (err.stack || '');
+  document.title = 'ERROR';
+}
+</script>

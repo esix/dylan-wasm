@@ -17,3 +17,6 @@ hello/_build/
 # wasm build outputs
 *.wasm
 runtime-wasm64/**/obj/
+
+# playwright artifacts
+.playwright-mcp/

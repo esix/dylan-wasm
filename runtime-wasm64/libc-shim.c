@@ -8,6 +8,12 @@
 #include <stddef.h>
 #include <stdint.h>
 
+/* host imports (output + diagnostics) */
+__attribute__((import_module("env"), import_name("host_write")))
+extern long host_write(int fd, const void *buf, unsigned long count);
+static unsigned long shim_strlen(const char *s) { unsigned long n = 0; while (s[n]) n++; return n; }
+static void report(const char *m) { host_write(2, m, shim_strlen(m)); }
+
 /* ---------- bump allocator (leak; MVP, no collection) ---------- */
 extern unsigned char __heap_base;        /* provided by wasm-ld */
 static uintptr_t g_bump = 0;
@@ -47,8 +53,8 @@ void *memmove(void *d, const void *s, size_t n) {
 }
 
 /* ---------- process / misc libc stubs ---------- */
-void abort(void)            { __builtin_trap(); }
-void exit(int code)         { (void)code; __builtin_trap(); }   /* TODO: clean exit via host */
+void abort(void)            { report("[trap] abort\n"); __builtin_trap(); }
+void exit(int code)         { (void)code; report("[trap] exit\n"); __builtin_trap(); }
 int  atexit(void (*fn)(void)) { (void)fn; return 0; }
 void *stderr = 0;
 void *stdout = 0;
@@ -67,7 +73,7 @@ void  EstablishDylanExceptionHandlers(void)       { }
 void  primitive_initialize_thread_variables(void) { }
 void  primitive_reset_float_environment(void)     { }
 void *get_current_thread_handle(void)             { return 0; }
-void  _Unwind_RaiseException(void *exc)           { (void)exc; __builtin_trap(); }
+void  _Unwind_RaiseException(void *exc)           { (void)exc; report("[trap] _Unwind_RaiseException\n"); __builtin_trap(); }
 
 /* ---------- compiler-rt 128-bit builtins (no wasm compiler-rt available) ----------
    Standard algorithms; union access only (never multiply/shift __int128 directly,
@@ -114,3 +120,45 @@ __int128 __multi3(__int128 a, __int128 b) {
   r.s.high = hi + aa.s.low * bb.s.high + aa.s.high * bb.s.low;   /* low 128 bits */
   return r.all;
 }
+
+/* 128-bit divide/shift-right builtins. Hello-world prints a literal string and
+   never exercises integer formatting, so these only need to *exist* to link;
+   they trap if actually called. Replace with real long-division when integer
+   formatting is needed. */
+__int128 __udivti3(__int128 a, __int128 b) { (void)a;(void)b; report("[trap] __udivti3\n"); __builtin_trap(); }
+__int128 __umodti3(__int128 a, __int128 b) { (void)a;(void)b; report("[trap] __umodti3\n"); __builtin_trap(); }
+__int128 __divti3 (__int128 a, __int128 b) { (void)a;(void)b; report("[trap] __divti3\n");  __builtin_trap(); }
+__int128 __modti3 (__int128 a, __int128 b) { (void)a;(void)b; report("[trap] __modti3\n");  __builtin_trap(); }
+__int128 __lshrti3(__int128 a, int b)      { (void)a;(void)b; report("[trap] __lshrti3\n"); __builtin_trap(); }
+
+/* ---------- transcendental math: stubs (hello doesn't use them) ---------- */
+double acos(double x){return x;}  float acosf(float x){return x;}
+double asin(double x){return x;}  float asinf(float x){return x;}
+double atan(double x){return x;}  float atanf(float x){return x;}
+double cos(double x){return x;}   float cosf(float x){return x;}
+double sin(double x){return x;}   float sinf(float x){return x;}
+double tan(double x){return x;}   float tanf(float x){return x;}
+double exp(double x){return x;}   float expf(float x){return x;}
+double log(double x){return x;}   float logf(float x){return x;}
+double hypot(double x,double y){(void)y;return x;} float hypotf(float x,float y){(void)y;return x;}
+
+/* ---------- output path: route POSIX write() through the host import ---------- */
+long write(int fd, const void *buf, unsigned long count) {
+  return host_write(fd, buf, count);
+}
+
+/* ---------- file-descriptor / OS stubs (hello only writes stdout) ---------- */
+long  read(int fd, void *buf, unsigned long n) { (void)fd;(void)buf;(void)n; return 0; }
+int   close(int fd)            { (void)fd; return 0; }
+int   fsync(int fd)            { (void)fd; return 0; }
+int   isatty(int fd)           { (void)fd; return 1; }   /* claim a tty: unbuffered, no seeking */
+long  lseek(int fd, long off, int whence) { (void)fd;(void)off;(void)whence; return -1; }
+long  readlink(const char *p, char *b, unsigned long n) { (void)p;(void)b;(void)n; return -1; }
+long  time(long *t)            { if (t) *t = 0; return 0; }
+
+/* ---------- Dylan io syscall wrappers (stubs; stdout is non-seekable) ---------- */
+int   io_errno(void)                 { return 0; }
+char *io_strerror(int e)             { (void)e; return ""; }
+long  io_lseek(int fd, long off, int whence) { (void)fd;(void)off;(void)whence; return -1; }
+int   io_fd_positionable(int fd)     { (void)fd; return 0; }   /* false: stdout not positionable */
+long  timer_get_point_in_time(void)  { return 0; }

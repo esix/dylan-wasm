@@ -158,6 +158,205 @@ index 0000000..243e4ef
 +CCFLAGS  += -DOPEN_DYLAN_PLATFORM_UNIX -DOPEN_DYLAN_ARCH_WASM64 ;
 +
 +include $(SYSTEM_BUILD_SCRIPTS)/posix-build.jam ;
+diff --git a/sources/lib/run-time/boehm-collector.c b/sources/lib/run-time/boehm-collector.c
+index e178250..43ca44a 100644
+--- a/sources/lib/run-time/boehm-collector.c
++++ b/sources/lib/run-time/boehm-collector.c
+@@ -325,7 +325,7 @@ void *primitive_alloc_s2(size_t size,
+ RUN_TIME_API
+ void *primitive_alloc_s(size_t size,
+                         void *wrapper,
+-                        int no_to_fill,
++                        size_t no_to_fill,
+                         void *fill)
+ {
+   alloc_internal(size, wrapper,
+@@ -373,7 +373,7 @@ void *primitive_alloc_rf(size_t size,
+ RUN_TIME_API
+ void *primitive_alloc_s_r(size_t size,
+                           void *wrapper,
+-                          int no_to_fill,
++                          size_t no_to_fill,
+                           void *fill,
+                           size_t rep_size,
+                           size_t rep_size_slot)
+@@ -388,15 +388,19 @@ void *primitive_alloc_s_r(size_t size,
+ }
+ 
+ 
+-#define define_primitive_alloc_s_rf(type, suffix) \
++/* ptype = parameter type (matches the LLVM primitive descriptor: integer fills
++   are passed as a machine <raw-integer>); type = element store type (narrowed
++   on store). They differ for half_word (param word, store unsigned short) so
++   the wasm call_indirect signature matches the descriptor's <raw-integer>. */
++#define define_primitive_alloc_s_rf(ptype, type, suffix) \
+ RUN_TIME_API \
+ void *primitive_alloc_s_ ## suffix(size_t size, \
+                                    void *wrapper, \
+-                                   int no_to_fill, \
++                                   size_t no_to_fill, \
+                                    void *fill, \
+                                    size_t rep_size, \
+                                    size_t rep_size_slot, \
+-                                   type rep_fill) \
++                                   ptype rep_fill) \
+ { \
+   alloc_internal(size, wrapper,  \
+                  0, 0, 0, 0, \
+@@ -407,22 +411,22 @@ void *primitive_alloc_s_ ## suffix(size_t size, \
+                  MMAllocateObject); \
+ }
+ 
+-define_primitive_alloc_s_rf(dylan_object, rf)
+-define_primitive_alloc_s_rf(word, rwf)
+-define_primitive_alloc_s_rf(half_word, rhf)
+-define_primitive_alloc_s_rf(single_float, rsff)
+-define_primitive_alloc_s_rf(double_float, rdff)
+-define_primitive_alloc_s_rf(double_word, rdwf)
++define_primitive_alloc_s_rf(dylan_object, dylan_object, rf)
++define_primitive_alloc_s_rf(word, word, rwf)
++define_primitive_alloc_s_rf(word, half_word, rhf)
++define_primitive_alloc_s_rf(single_float, single_float, rsff)
++define_primitive_alloc_s_rf(double_float, double_float, rdff)
++define_primitive_alloc_s_rf(double_word, double_word, rdwf)
+ 
+ 
+ RUN_TIME_API
+ void *primitive_alloc_s_rbf(size_t size,
+                             void *wrapper,
+-                            int no_to_fill,
++                            size_t no_to_fill,
+                             void *fill,
+                             size_t rep_size,
+                             size_t rep_size_slot,
+-                            int byte_fill)
++                            size_t byte_fill)
+ {
+   alloc_internal(size, wrapper,
+                  0, 0, 0, 0,
+@@ -437,11 +441,11 @@ void *primitive_alloc_s_rbf(size_t size,
+ RUN_TIME_API
+ void *primitive_alloc_s_rbfz(size_t size,
+                              void *wrapper,
+-                             int no_to_fill,
++                             size_t no_to_fill,
+                              void *fill,
+                              size_t rep_size,
+                              size_t rep_size_slot,
+-                             int byte_fill)
++                             size_t byte_fill)
+ {
+   alloc_internal(size, wrapper,
+                  0, 0, 0, 0,
+@@ -458,7 +462,7 @@ void *primitive_alloc_rbfz(size_t size,
+                            void *wrapper,
+                            size_t rep_size,
+                            size_t rep_size_slot,
+-                           int byte_fill)
++                           size_t byte_fill)
+ {
+   alloc_internal(size, wrapper,
+                  0, 0, 0, 0,
+@@ -473,7 +477,7 @@ void *primitive_alloc_rbfz(size_t size,
+ RUN_TIME_API
+ void *primitive_alloc_s_rb(size_t size,
+                            void *wrapper,
+-                           int no_to_fill,
++                           size_t no_to_fill,
+                            void *fill,
+                            size_t rep_size,
+                            size_t rep_size_slot)
+@@ -505,7 +509,7 @@ void *primitive_alloc_leaf(size_t size,
+ RUN_TIME_API
+ void *primitive_alloc_leaf_s_r(size_t size,
+                                void *wrapper,
+-                               int no_to_fill,
++                               size_t no_to_fill,
+                                void *fill,
+                                size_t rep_size,
+                                size_t rep_size_slot)
+@@ -554,7 +558,7 @@ void *primitive_alloc_leaf_s2(size_t size,
+ RUN_TIME_API
+ void *primitive_alloc_leaf_s(size_t size,
+                              void *wrapper,
+-                             int no_to_fill,
++                             size_t no_to_fill,
+                              void *fill)
+ {
+   alloc_internal(size, wrapper,
+@@ -587,11 +591,11 @@ void *primitive_alloc_leaf_r(size_t size,
+ RUN_TIME_API
+ void *primitive_alloc_leaf_s_rbf(size_t size,
+                                  void *wrapper,
+-                                 int no_to_fill,
++                                 size_t no_to_fill,
+                                  void *fill,
+                                  size_t rep_size,
+                                  size_t rep_size_slot,
+-                                 int byte_fill)
++                                 size_t byte_fill)
+ {
+   alloc_internal(size, wrapper,
+                  0, 0, 0, 0,
+@@ -630,11 +634,11 @@ define_primitive_alloc_leaf_rf(double_word, rdwf)
+ RUN_TIME_API
+ void *primitive_alloc_leaf_s_rbfz(size_t size,
+                                   void *wrapper,
+-                                  int no_to_fill,
++                                  size_t no_to_fill,
+                                   void *fill,
+                                   size_t rep_size,
+                                   size_t rep_size_slot,
+-                                  int byte_fill)
++                                  size_t byte_fill)
+ {
+   alloc_internal(size, wrapper,
+                  0, 0, 0, 0,
+@@ -651,7 +655,7 @@ void *primitive_alloc_leaf_rbfz(size_t size,
+                                 void *wrapper,
+                                 size_t rep_size,
+                                 size_t rep_size_slot,
+-                                int byte_fill)
++                                size_t byte_fill)
+ {
+   alloc_internal(size, wrapper,
+                  0, 0, 0, 0,
+@@ -666,7 +670,7 @@ void *primitive_alloc_leaf_rbfz(size_t size,
+ RUN_TIME_API
+ void *primitive_alloc_leaf_s_rb(size_t size,
+                                 void *wrapper,
+-                                int no_to_fill,
++                                size_t no_to_fill,
+                                 void *fill,
+                                 size_t rep_size,
+                                 size_t rep_size_slot)
+@@ -685,7 +689,7 @@ RUN_TIME_API
+ void *primitive_alloc_exact_awl_s_r(size_t size,
+                                     void *wrapper,
+                                     void *assoc,
+-                                    int no_to_fill,
++                                    size_t no_to_fill,
+                                     void *fill,
+                                     size_t rep_size,
+                                     size_t rep_size_slot)
+@@ -704,7 +708,7 @@ RUN_TIME_API
+ void *primitive_alloc_weak_awl_s_r(size_t size,
+                                    void *wrapper,
+                                    void *assoc,
+-                                   int no_to_fill,
++                                   size_t no_to_fill,
+                                    void *fill,
+                                    size_t rep_size,
+                                    size_t rep_size_slot)
+@@ -758,7 +762,7 @@ void *primitive_alloc_weak_awl_rf(size_t size,
+ RUN_TIME_API
+ void *primitive_alloc_wrapper_s_r(size_t size,
+                                   void *wrapper,
+-                                  int no_to_fill,
++                                  size_t no_to_fill,
+                                   void *fill,
+                                   size_t rep_size,
+                                   size_t rep_size_slot)
 diff --git a/sources/registry/wasm32-wasi/common-dylan b/sources/registry/wasm32-wasi/common-dylan
 new file mode 100644
 index 0000000..045c0be

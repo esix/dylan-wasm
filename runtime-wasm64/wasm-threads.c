@@ -6,7 +6,15 @@
  * (note primitive_detach_thread now returns void). Derived from the upstream
  * dummy-threads.c, updated to current declarations.
  */
+/* run-time.h's prototypes for these two declare a `dylan_value` return, but the
+   LLVM primitive descriptors declare `=> ()` (void). C ignores return type for
+   linkage so native tolerates the mismatch; wasm call_indirect does not, so we
+   must compile them as void. Rename the stale prototypes out of the way. */
+#define primitive_initialize_special_thread od_stale_iss_proto
+#define primitive_initialize_current_thread od_stale_ics_proto
 #include "run-time.h"
+#undef primitive_initialize_special_thread
+#undef primitive_initialize_current_thread
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -37,11 +45,14 @@ dylan_value primitive_thread_join_multiple(dylan_value v)
 { ignore(v); threads_get_stuffed(); return THREAD_SUCCESS; }
 void primitive_thread_yield(void) { }
 void primitive_sleep(dylan_value ms) { ignore(ms); }
-dylan_value primitive_current_thread(void) { return THREAD_SUCCESS; }
-dylan_value primitive_initialize_current_thread(dylan_value t, DBOOL s)
-{ ignore(s); one_true_thread = t; return THREAD_SUCCESS; }
-dylan_value primitive_initialize_special_thread(dylan_value t)
-{ one_true_thread = t; return THREAD_SUCCESS; }
+/* descriptor: => (thread :: <object>) — must return the thread object set at
+   init (one_true_thread), not an integer, or callers fail their type check. */
+dylan_value primitive_current_thread(void) { return one_true_thread; }
+/* descriptors declare these `=> ()` (void) — must match for wasm call_indirect */
+void primitive_initialize_current_thread(dylan_value t, DBOOL s)
+{ ignore(s); one_true_thread = t; }
+void primitive_initialize_special_thread(dylan_value t)
+{ one_true_thread = t; }
 
 /* --- thread variables --- */
 dylan_value primitive_allocate_thread_variable(dylan_value i) { ignore(i); return DFALSE; }
