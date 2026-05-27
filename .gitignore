@@ -13,3 +13,7 @@ hello/_build/
 # Editor / OS cruft
 .DS_Store
 *.swp
+
+# wasm build outputs
+*.wasm
+runtime-wasm64/**/obj/
