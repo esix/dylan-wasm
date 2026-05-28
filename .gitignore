@@ -20,3 +20,6 @@ runtime-wasm64/**/obj/
 
 # playwright artifacts
 .playwright-mcp/
+
+# screenshots
+*.png

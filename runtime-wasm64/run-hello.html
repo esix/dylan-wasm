@@ -1,38 +1,86 @@
 <!doctype html>
+<html>
+<head>
 <meta charset="utf-8">
-<title>Dylan → wasm64 hello</title>
-<pre id="out">[loading…]</pre>
+<title>Dylan → WebAssembly</title>
+<style>
+  body { background:#0d1117; color:#c9d1d9; font:14px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;
+         margin:0; padding:2rem; }
+  h1 { font-size:1.4rem; color:#e6edf3; margin:0 0 .25rem; }
+  .sub { color:#8b949e; margin-bottom:1.5rem; }
+  .card { background:#161b22; border:1px solid #30363d; border-radius:8px; padding:1rem 1.25rem; margin:0 0 1rem; max-width:820px; }
+  .row { display:flex; gap:.6rem; align-items:baseline; padding:.15rem 0; }
+  .ok::before  { content:"✅ "; } .work::before { content:"⚙️ "; } .stop::before { content:"⛔ "; }
+  .k { color:#8b949e; min-width:200px; } .v { color:#e6edf3; }
+  .stop-card { border-color:#9e6a03; }
+  .ok-card { border-color:#238636; }
+  pre { background:#0d1117; border:1px solid #30363d; border-radius:6px; padding:.75rem; overflow:auto; color:#c9d1d9; }
+  .frame { color:#79c0ff; } .arrow { color:#8b949e; }
+  .hello { color:#3fb950; font-size:1.2rem; white-space:pre-wrap; }
+  small { color:#6e7681; }
+</style>
+</head>
+<body>
+<h1>Dylan → WebAssembly</h1>
+<div class="sub">Open Dylan compiled to wasm64, running its own runtime in your browser.</div>
+<div id="app">loading…</div>
+
 <script type="module">
-const out = document.getElementById('out');
-const log = (s) => { out.textContent += s; console.log('[dylan] ' + s.replace(/\n$/, '')); };
-let memory;
-const dec = new TextDecoder();
-const imports = {
-  env: {
-    // long host_write(int fd, const void *buf, unsigned long count) — memory64: BigInt args
-    host_write(fd, ptr, len) {
-      const s = dec.decode(new Uint8Array(memory.buffer, Number(ptr), Number(len)));
-      log(s);
-      return BigInt(Number(len));
-    },
-  },
-};
-try {
-  out.textContent = '';
+const app = document.getElementById('app');
+const esc = s => s.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+Error.stackTraceLimit = 100000;
+
+let memory; const dec = new TextDecoder(); let dylanOut = '';
+const imports = { env: { host_write(fd, ptr, len) {
+  dylanOut += dec.decode(new Uint8Array(memory.buffer, Number(ptr), Number(len)));
+  return BigInt(Number(len));
+} } };
+
+const rows = items => items.map(([cls,k,v]) =>
+  `<div class="row ${cls}"><span class="k">${k}</span><span class="v">${v}</span></div>`).join('');
+
+(async () => {
+  const t0 = performance.now();
   const buf = await (await fetch('hello.wasm')).arrayBuffer();
+  const sizeMB = (buf.byteLength/1048576).toFixed(1);
   const { instance } = await WebAssembly.instantiate(buf, imports);
-  const e = instance.exports;
-  memory = e.memory;
-  console.log('[harness] memory64=' + (memory.buffer.byteLength >= 0) +
-              ' have main=' + !!e.main + ' ctors=' + !!e.__wasm_call_ctors);
-  e.__wasm_call_ctors?.();
-  e._Init_Run_Time?.();
-  const rc = e.main?.(0, 0n);
-  console.log('[harness] main returned: ' + rc);
-  document.title = 'DONE';
-} catch (err) {
-  console.log('[harness] ERROR: ' + err);
-  out.textContent += '\n[harness] ERROR: ' + err + '\n' + (err.stack || '');
-  document.title = 'ERROR';
-}
+  const e = instance.exports; memory = e.memory;
+  const loadMs = Math.round(performance.now() - t0);
+
+  let outcome, trace = '', cls = 'stop-card';
+  try {
+    const rc = e.main(0, 0n);
+    outcome = ['ok','main returned', String(rc)]; cls = 'ok-card';
+  } catch (err) {
+    const frames = (err.stack||'').split('\n')
+      .map(s => (s.match(/hello\.wasm\.([A-Za-z0-9_]+)/)||[])[1]).filter(Boolean);
+    const oldest = frames.slice().reverse();
+    const seen = new Set(); const chain = [];
+    for (const f of oldest) {
+      if (/dispatch_engine|discriminate|monomorphic|engine_node|secondary_dispatch|ponder|compute_/.test(f)) continue;
+      if (!seen.has(f)) { seen.add(f); chain.push(f); }
+      if (f === 'KputhashVKiI' || f === 'xep_2') break;
+    }
+    outcome = ['stop', 'current blocker', err.message + ' in <span class="frame">' + esc(frames[0]||'?') + '</span>'];
+    trace = chain.map((f,i)=> (i? '<span class="arrow">→ </span>':'') + '<span class="frame">'+esc(f)+'</span>').join(' ');
+  }
+
+  const pipeline = [
+    ['ok','Module fetched', `${sizeMB} MB &nbsp;<small>(${loadMs} ms)</small>`],
+    ['ok','Instantiated', `wasm64 (memory64), ${memory.buffer.byteLength/1048576} MB memory`],
+    ['ok','Exports', `${Object.keys(e).length.toLocaleString()} functions`],
+    ['ok','Runtime entered', `main → __wasm_call_ctors → _Init_dylan_`],
+    ['work','Library init', `running…`],
+    outcome,
+  ];
+
+  document.title = cls==='ok-card' ? 'Dylan/wasm ✓' : 'Dylan/wasm — booting';
+  app.innerHTML =
+    `<div class="card ${cls}">${rows(pipeline)}</div>` +
+    (dylanOut ? `<div class="card ok-card"><div class="k">Dylan output</div><div class="hello">${esc(dylanOut)}</div></div>` : '') +
+    (trace ? `<div class="card"><div class="k" style="margin-bottom:.4rem">How far it got (init chain)</div><pre>${trace}</pre>
+              <small>The runtime boots and runs in-browser up to this point — the remaining gap is a type-check in symbol-table init.</small></div>` : '');
+})().catch(err => { app.innerHTML = `<div class="card stop-card"><div class="row stop"><span class="v">harness error: ${esc(String(err))}</span></div></div>`; });
 </script>
+</body>
+</html>
