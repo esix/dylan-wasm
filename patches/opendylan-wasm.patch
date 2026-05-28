@@ -1,5 +1,5 @@
 diff --git a/sources/dfmc/llvm-back-end/llvm-targets.dylan b/sources/dfmc/llvm-back-end/llvm-targets.dylan
-index b6acc38..049c233 100644
+index b6acc38..77120ef 100644
 --- a/sources/dfmc/llvm-back-end/llvm-targets.dylan
 +++ b/sources/dfmc/llvm-back-end/llvm-targets.dylan
 @@ -187,6 +187,65 @@ define method llvm-back-end-calling-convention-fast
@@ -102,6 +102,24 @@ index b6acc38..049c233 100644
  /// LLVM Thread-local storage platform support
  
  define method llvm-runtime-thread-local-support?
+@@ -346,3 +432,17 @@ define method llvm-thread-local-support?
+  => (support? :: <boolean>)
+   #f
+ end method;
++
++// wasm is single-threaded here, and wasm thread-local lowering needs __tls_base
++// set up by a _start/__wasm_init_tls we don't have (--no-entry). Emit the TEB
++// (Pteb) as a plain global instead so address-taking and access don't fault.
++
++define method llvm-runtime-thread-local-support?
++    (back-end :: <llvm-wasm32-back-end>) => (support? :: <boolean>)
++  #f
++end method;
++
++define method llvm-runtime-thread-local-support?
++    (back-end :: <llvm-wasm64-back-end>) => (support? :: <boolean>)
++  #f
++end method;
 diff --git a/sources/jamfiles/shared-darwin-build.jam b/sources/jamfiles/shared-darwin-build.jam
 index bbfc788..2673b35 100644
 --- a/sources/jamfiles/shared-darwin-build.jam

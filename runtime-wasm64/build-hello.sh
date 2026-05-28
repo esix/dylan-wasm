@@ -39,7 +39,9 @@ done
 "$LLVM/llc" -mtriple=wasm64-unknown-wasi -filetype=obj -O2 "$GEN/wasm64-wasi-runtime.bc" -o "$OBJ/generated-runtime.o"
 
 echo "## Linking hello.wasm..."
+# 64KB default shadow stack is far too small for the Dylan runtime; give it 32MB.
 "$WLD" -mwasm64 --no-entry --export-dynamic --initial-memory=536870912 --max-memory=1073741824 \
+  -z stack-size=33554432 \
   "$OBJ"/*.o -o "$BUILD/hello.wasm" 2>/tmp/hello-wld && {
   echo "   *** LINKED: $BUILD/hello.wasm ($(ls -la "$BUILD/hello.wasm"|awk '{print $5}') bytes) ***"
 } || { echo "   diagnostics:"; grep -iE "undefined|error|duplicate" /tmp/hello-wld | sort -u | head -40; }
