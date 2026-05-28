@@ -1,3 +1,32 @@
+diff --git a/sources/dfmc/llvm-back-end/llvm-sections.dylan b/sources/dfmc/llvm-back-end/llvm-sections.dylan
+index 1b51ed4..3a261b4 100644
+--- a/sources/dfmc/llvm-back-end/llvm-sections.dylan
++++ b/sources/dfmc/llvm-back-end/llvm-sections.dylan
+@@ -40,6 +40,24 @@ define method llvm-section-name
+   end select
+ end method;
+ 
++// wasm: like Darwin, use the default sections (#f). We use a conservative/leak
++// collector (no precise traced sections needed), and wasm-ld does not honor the
++// "$"-ordered section convention these names rely on, so emitting them scatters
++// the runtime's data regions and corrupts the start/end markers it walks.
++define method llvm-section-name
++    (back-end :: <llvm-wasm32-back-end>, section :: <symbol>,
++     #key thread-local? = #f)
++ => (name :: false-or(<string>));
++  #f
++end method;
++
++define method llvm-section-name
++    (back-end :: <llvm-wasm64-back-end>, section :: <symbol>,
++     #key thread-local? = #f)
++ => (name :: false-or(<string>));
++  #f
++end method;
++
+ // Darwin is different (cf. macOS ABI Mach-O File Format Reference)
+ // LLVM section names for Mach-O are "segment, section" (comma-separated)
+ define method llvm-section-name
 diff --git a/sources/dfmc/llvm-back-end/llvm-targets.dylan b/sources/dfmc/llvm-back-end/llvm-targets.dylan
 index b6acc38..77120ef 100644
 --- a/sources/dfmc/llvm-back-end/llvm-targets.dylan
