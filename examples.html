@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dylan Examples</title>
+<style>
+  :root { color-scheme: dark; }
+  body { background:#0d1117; color:#c9d1d9; margin:0; padding:2.5rem 1.5rem;
+         font:14px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace; }
+  .wrap { max-width:860px; margin:0 auto; }
+  h1 { font-size:1.6rem; color:#e6edf3; margin:0 0 .25rem; }
+  .sub { color:#8b949e; margin:0 0 1rem; }
+  .banner { background:#161b22; border:1px solid #9e6a03; border-radius:8px;
+            padding:.7rem 1rem; margin:0 0 2rem; color:#e3b341; }
+  .banner b { color:#f0c674; }
+  .ex { background:#161b22; border:1px solid #30363d; border-radius:10px;
+        padding:1.1rem 1.25rem; margin:0 0 1.5rem; }
+  .ex h2 { font-size:1.1rem; color:#79c0ff; margin:0 0 .2rem; }
+  .ex .desc { color:#8b949e; margin:0 0 .8rem; }
+  .label { color:#6e7681; font-size:.8rem; text-transform:uppercase; letter-spacing:.05em;
+           margin:.9rem 0 .3rem; }
+  pre { background:#0d1117; border:1px solid #21262d; border-radius:6px;
+        padding:.75rem .9rem; overflow:auto; margin:0; }
+  .src .kw { color:#ff7b72; } .src .fn { color:#d2a8ff; } .src .ty { color:#7ee787; }
+  .out { color:#adbac7; } .out .green { color:#3fb950; }
+  footer { color:#6e7681; margin-top:1rem; text-align:center; }
+  a { color:#79c0ff; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Dylan, compiled and running</h1>
+  <p class="sub">Three console programs built with Open Dylan and executed by the compiled runtime + GC.</p>
+
+  <div class="banner">
+    <b>Status:</b> these ran <b>natively</b> (real output below). The WebAssembly build
+    boots the runtime in-browser but can't run a full program yet — every program shares
+    one remaining blocker in base-runtime init (<code>_Init_dylan_</code>, boot-symbol setup).
+    Fix that one thing and these run in the browser too.
+  </div>
+
+  <!-- quicksort -->
+  <div class="ex">
+    <h2>quicksort</h2>
+    <p class="desc">Generic in-place quicksort over any sequence — strings, vectors of symbols/characters/integers — plus a 50k-element benchmark.</p>
+    <div class="label">Dylan source</div>
+<pre class="src"><span class="kw">define method</span> <span class="fn">sequence-quicksort</span>
+    (v :: <span class="ty">&lt;sequence&gt;</span>) =&gt; (sorted-v :: <span class="ty">&lt;sequence&gt;</span>)
+  <span class="kw">local method</span> exchange (m, n)
+          <span class="kw">let</span> t = v[m]; v[m] := v[n]; v[n] := t
+        <span class="kw">end</span>;
+  <span class="comment">... partition + recurse ...</span></pre>
+    <div class="label">Output</div>
+<pre class="out">"My dog has fleas." sorted is "   .Maadefghlossy"
+#[My, dog, has, fleas] sorted is #[My, dog, fleas, has]
+#[m, d, h, f] sorted is #[d, f, h, m]
+#[2, 4, 1, 3] sorted is #[1, 2, 3, 4]
+Sorting a 50000 element &lt;sequence&gt;...took 0.053092 seconds
+Sorting a 50000 element &lt;sequence&gt; (with type decls)...took 0.024814 seconds
+Sorting a 50000 element &lt;integer-vector&gt;...took 0.003457 seconds</pre>
+  </div>
+
+  <!-- factorial -->
+  <div class="ex">
+    <h2>factorial-big</h2>
+    <p class="desc">Factorials with overflow-aware integer arithmetic.</p>
+    <div class="label">Output</div>
+<pre class="out">$maximum-integer = 170141183460469231731687303715884105727
+factorial(20) = <span class="green">2432902008176640000</span> (in 0.000016 seconds)
+factorial(50) - Error: Integer overflow (result too large for this representation).</pre>
+  </div>
+
+  <!-- hanoi -->
+  <div class="ex">
+    <h2>towers-of-hanoi</h2>
+    <p class="desc">Classic recursion: move 5 disks in 2⁵−1 = 31 moves.</p>
+    <div class="label">Dylan source</div>
+<pre class="src"><span class="kw">define method</span> <span class="fn">hanoi</span>
+    (from :: <span class="ty">&lt;tower&gt;</span>, to :: <span class="ty">&lt;tower&gt;</span>, with :: <span class="ty">&lt;tower&gt;</span>,
+     #key count :: <span class="ty">&lt;integer&gt;</span> = from.height)
+  <span class="kw">if</span> (count &gt;= 1)
+    hanoi(from, with, to, count: count - 1);
+    move-disk(from, to);
+    hanoi(with, to, from, count: count - 1)
+  <span class="kw">end</span>
+<span class="kw">end</span>;</pre>
+    <div class="label">Output</div>
+<pre class="out">Towers of Hanoi:
+
+Initial position:
+  Left: 5, 4, 3, 2, 1
+  Middle:
+  Right:
+
+...............................<span class="green">took 31 operations</span>
+
+Final position:
+  Left:
+  Middle: 5, 4, 3, 2, 1
+  Right:</pre>
+  </div>
+
+  <footer>Open Dylan → native (above) and → wasm64 (boots in-browser). See <code>run-hello.html</code> for the live wasm dashboard.</footer>
+</div>
+</body>
+</html>

@@ -23,3 +23,5 @@ runtime-wasm64/**/obj/
 
 # screenshots
 *.png
+_native-examples/
+DESIGN.md
