@@ -101,14 +101,17 @@ define method quicksort-demo () => ()
   // Stay within tagged-int range — with generic-arithmetic loaded
   // $maximum-integer is a <double-integer> that `random` doesn't handle.
   for (i :: <integer> from 0 below n) orig[i] := random(1000000000); end;
-  // Only sequence-quicksort here. The integer-vector specialization no
-  // longer hits the `masked-class-instance?` recursion (now patched in
-  // objects.dylan), but exposes a *different* bug: quicksort's `partition`
-  // method makes a tail-recursive `partition(i + 1, j - 1, x)` call that
-  // wasm doesn't optimize to a loop, blowing the stack on 50K elements
-  // after ~2500 recursive frames. To run the typed specialization we'd
-  // need either compiler support for emitting wasm tail-call instructions
-  // (Chrome 112+ supports them) or hand-converting partition to a loop.
+  // Only sequence-quicksort. Open Dylan loop-converts that one's
+  // partition (its tail-recursive `partition(i + 1, j - 1, x)` becomes
+  // a `br label %0` back to entry — verified in the emitted IR). The
+  // typed `integer-vector-quicksort`'s partition does NOT get that
+  // loop conversion — its recursive call goes via the method object
+  // (`call %iep(@KpartitionF79, ...)`) and is followed by multi-value
+  // extractvalue, so it isn't in LLVM's "tail position" and isn't
+  // rewritten. On wasm without a `musttail` + `+tail-call` codegen
+  // path, ~2500 frames overflow the JS engine's call stack. Fix would
+  // be in the Open Dylan back-end (extend loop-conversion to typed
+  // methods, or emit musttail on the recursive call).
   for (function in vector(sequence-quicksort),
        typename in #["<sequence>"])
     map-into(data, identity, orig);
