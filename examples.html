@@ -105,8 +105,21 @@ const env = {
   },
   host_throw(exc) { throw new DylanThrow(exc); },
   host_now_ns() { return BigInt(Math.floor(performance.now() * 1e6)); },
-  __cxa_find_matching_catch_2()  { setTempRet0(0);             return jsThrewValue; },
-  __cxa_find_matching_catch_3(t) { setTempRet0(Number(t) | 0); return jsThrewValue; },
+  // Compare thrown bef.bef_typeid (at exc+40) to the catch's typeinfo.
+  // See run-hello.html for full commentary.
+  __cxa_find_matching_catch_2()  { setTempRet0(0); return jsThrewValue; },
+  __cxa_find_matching_catch_3(t) {
+    if (jsThrewValue !== 0n) {
+      const thrownTypeid =
+        new BigUint64Array(memory.buffer)[(Number(jsThrewValue) + 40) >>> 3];
+      if (thrownTypeid === t) {
+        setTempRet0(Number(t) & 0xFFFFFFFF);
+        return jsThrewValue;
+      }
+    }
+    setTempRet0(0);
+    return jsThrewValue;
+  },
 };
 ['invoke_vj','invoke_vjjj','invoke_vjjjj','invoke_vjjjjj','invoke_vjjjjjj',
  'invoke_vjjjjjjj','invoke_vjjjjjjjj','invoke_vjjjjjjjjj','invoke_vjjjjjjjjjj',

@@ -101,9 +101,10 @@ define method quicksort-demo () => ()
   // Stay within tagged-int range — with generic-arithmetic loaded
   // $maximum-integer is a <double-integer> that `random` doesn't handle.
   for (i :: <integer> from 0 below n) orig[i] := random(1000000000); end;
-  // NB: only sequence-quicksort here — the integer-vector specialization
-  // hits an instance-check recursion under generic-arithmetic that wants
-  // a deeper EH-bridge fix to fully resolve.
+  // NB: only sequence-quicksort here. The integer-vector specialization
+  // tickles an instance-check recursion (Kmasked_class_instanceQVKiI calls
+  // itself) under generic-arithmetic — a separate, dispatch-level issue
+  // distinct from the EH bridge.
   map-into(data, identity, orig);
   format-out("Sorting %d <integer>s as <sequence>...", n);
   let (seconds, microseconds) = timing () sequence-quicksort(data); end;

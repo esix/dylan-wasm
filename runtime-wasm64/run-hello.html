@@ -71,14 +71,32 @@ const env = {
   },
   host_throw(exc) { throw new DylanThrow(exc); },
   host_now_ns() { return BigInt(Math.floor(performance.now() * 1e6)); },
-  // For Open Dylan's NLX (block/return-from): the catch typeinfo is a unique
-  // marker per block, and the thrown exception is for that exact block. We
-  // approximate "match" by always returning the thrown value and setting
-  // tempRet0 to the typeinfo's address (matches what llvm_eh_typeid_for
-  // returns). Good enough for happy-path NLX; an unmatched real error will
-  // also "match" here and may behave oddly — to be refined.
-  __cxa_find_matching_catch_2()  { setTempRet0(0);             return jsThrewValue; },
-  __cxa_find_matching_catch_3(t) { setTempRet0(Number(t) | 0); return jsThrewValue; },
+  // Open Dylan's exception object is a `struct dylan_bef`. Its layout
+  // (from llvm-aarch64-darwin-runtime.h):
+  //   bef_unwind_exception[4]  // 32 bytes (_Unwind_Exception)
+  //   bef_frame_pointer        //  8 bytes
+  //   bef_typeid               //  8 bytes  ← what catch clauses compare to
+  //   ...
+  // The personality function in llvm-nlx.c matches by `type == bef_typeid`,
+  // i.e., the catch's typeinfo address equals the thrown bef's typeid. We
+  // implement the same check here: read the i64 at exc+40 and compare to
+  // the catch's typeinfo. tempRet0 holds the i32 selector that the
+  // landingpad code compares against llvm_eh_typeid_for(@typeinfo) =
+  // (i32)typeinfo. We always return the thrown value so `__resumeException`
+  // can re-throw the original on mismatch.
+  __cxa_find_matching_catch_2()  { setTempRet0(0); return jsThrewValue; },
+  __cxa_find_matching_catch_3(t) {
+    if (jsThrewValue !== 0n) {
+      const thrownTypeid =
+        new BigUint64Array(memory.buffer)[(Number(jsThrewValue) + 40) >>> 3];
+      if (thrownTypeid === t) {
+        setTempRet0(Number(t) & 0xFFFFFFFF);
+        return jsThrewValue;
+      }
+    }
+    setTempRet0(0);
+    return jsThrewValue;
+  },
 };
 ['invoke_vj','invoke_vjjj','invoke_vjjjj','invoke_vjjjjj','invoke_vjjjjjj',
  'invoke_vjjjjjjj','invoke_vjjjjjjjj','invoke_vjjjjjjjjj','invoke_vjjjjjjjjjj',
