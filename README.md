@@ -8,8 +8,7 @@ back-end.
 init, generic dispatch) up to one remaining blocker in base-runtime init
 (`_Init_dylan_`, boot-symbol setup). Open it with `run-hello.html` for a live
 status dashboard. Native builds of real programs (quicksort, factorial,
-towers-of-hanoi) run fully — see `examples.html`. Full story, the wasm32→wasm64
-pivot, and the remaining blocker are in [`DESIGN.md`](DESIGN.md).
+towers-of-hanoi) run fully — see `examples.html`.
 
 We target **wasm64 / memory64** (64-bit pointers): wasm32's 32-bit pointers tripped
 invalid size-dependent bitcasts in Open Dylan's runtime codegen, and wasm64 reuses
