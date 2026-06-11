@@ -4,14 +4,16 @@ Compiling [Dylan](https://opendylan.org/) to WebAssembly via Open Dylan's LLVM
 back-end.
 
 **Status:** Dylan programs **run in your browser** via wasm64. The included
-`hello` showcase (factorial, Fibonacci, `integer-to-string`, in-place sort,
-Towers of Hanoi) compiles to a ~5.4 MB `.wasm`, instantiates in Chrome /
-Firefox, and prints its output through `host_write` — full Dylan runtime
-(GC, generic dispatch, streams, `format-out`, **non-local-exit / conditions**
-via an Emscripten-style EH bridge) live in the browser. Open
-`run-hello.html` for the dashboard, or `examples.html` for the captured
-output alongside the source. Still missing for fancier programs:
-`application-arguments`, `random`, `timing`, big-integer overflow.
+`hello` showcase — factorial, Fibonacci, `integer-to-string`, in-place sort,
+and the **upstream Open Dylan `towers-of-hanoi` example verbatim** (with
+`<deque>`, generic methods, `next-method`, `map`/`range`) — compiles to a
+~5.4 MB `.wasm`, instantiates in Chrome / Firefox, and prints its output
+through `host_write`. Full Dylan runtime (GC, generic dispatch, streams,
+`format-out`, **non-local-exit / conditions** via an Emscripten-style EH
+bridge) live in the browser. Open `run-hello.html` for the dashboard, or
+`examples.html` for the captured output alongside the source. Still missing
+for the other native examples: `application-arguments`, `random`,
+`timing`, big-integer overflow.
 
 We target **wasm64 / memory64** (64-bit pointers): wasm32's 32-bit pointers tripped
 invalid size-dependent bitcasts in Open Dylan's runtime codegen, and wasm64 reuses

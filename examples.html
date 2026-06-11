@@ -38,20 +38,21 @@
     <b>green card directly below</b> is live: this page fetches <code>hello.wasm</code>,
     instantiates it, and shows what its <code>format-out</code> produced — real
     factorial, Fibonacci, <code>integer-to-string</code>, an in-place sort,
-    and 3-disk Towers of Hanoi computed by the Dylan runtime in this tab.
-    The <b>three programs after that</b> are upstream Open Dylan examples whose
-    output you see was captured from a <b>native</b> run on macOS; they need a
-    few more runtime pieces before they'll run in the browser too
+    and the <b>upstream <code>towers-of-hanoi</code> example, verbatim</b>
+    — all computed by the Dylan runtime in this tab. Of the three programs
+    after that, <code>towers-of-hanoi</code> is the same code as in the live
+    demo above; <code>quicksort</code> and <code>factorial-big</code> ran
+    <b>natively</b> on macOS and still need a few more runtime pieces
     (<code>application-arguments</code>, <code>random</code>, <code>timing</code>,
-    big-integer overflow handling). The hard parts — booting the runtime, GC,
-    dispatch, streams, <code>format-out</code>, and non-local-exit via an
-    Emscripten-style EH bridge — are done.
+    big-integer overflow handling) before they'll run in-browser. The hard
+    parts — runtime boot, GC, dispatch, streams, <code>format-out</code>, and
+    non-local-exit via an Emscripten-style EH bridge — are done.
   </div>
 
   <!-- live in-browser demo -->
   <div class="ex" style="border-color:#3fb950">
     <h2 style="color:#3fb950">live in your browser ✓</h2>
-    <p class="desc">factorial, fibonacci, and Towers of Hanoi compiled to wasm64 and executed by the Dylan runtime in your browser. Real GC, real method dispatch, real <code>format-out</code> through to <code>host_write</code>.</p>
+    <p class="desc">factorial, fibonacci, <code>integer-to-string</code>, an in-place sort, and — most importantly — the <b>upstream Open Dylan <code>towers-of-hanoi</code> example</b> (verbatim, with <code>&lt;deque&gt;</code>, classes, generic methods, <code>map</code>/<code>range</code>) compiled to wasm64 and executed by the Dylan runtime in your browser. Real GC, real method dispatch, real <code>format-out</code> through to <code>host_write</code>, real NLX / conditions via an Emscripten-style EH bridge.</p>
     <div class="label">Dylan source (in <code>hello/hello.dylan</code>)</div>
 <pre class="src"><span class="kw">define function</span> <span class="fn">fact</span> (n :: <span class="ty">&lt;integer&gt;</span>) =&gt; (r :: <span class="ty">&lt;integer&gt;</span>)
   <span class="kw">if</span> (n &lt;= 1) 1 <span class="kw">else</span> n * fact(n - 1) <span class="kw">end</span>
@@ -159,7 +160,7 @@ factorial(50) - Error: Integer overflow (result too large for this representatio
 
   <!-- hanoi -->
   <div class="ex">
-    <h2>towers-of-hanoi <span style="color:#8b949e;font-weight:normal;font-size:.85rem">— native output (the live demo above also includes a smaller 3-disk hanoi)</span></h2>
+    <h2>towers-of-hanoi <span style="color:#3fb950;font-weight:normal;font-size:.85rem">— now running live in the browser too (see the green card above)</span></h2>
     <p class="desc">Classic recursion: move 5 disks in 2⁵−1 = 31 moves.</p>
     <div class="label">Dylan source</div>
 <pre class="src"><span class="kw">define method</span> <span class="fn">hanoi</span>

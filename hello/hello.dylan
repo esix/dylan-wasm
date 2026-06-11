@@ -48,18 +48,80 @@ format-out("after sort:  ");
 for (x in nums) format-out("%d ", x); end for;
 format-out("\n\n");
 
-// ---------- towers of hanoi ----------
-define function hanoi
-    (n :: <integer>, from :: <string>, to :: <string>, via :: <string>) => ()
-  if (n = 1)
-    format-out("  disk 1: %s -> %s\n", from, to);
-  else
-    hanoi(n - 1, from, via, to);
-    format-out("  disk %d: %s -> %s\n", n, from, to);
-    hanoi(n - 1, via, to, from);
-  end if;
-end function;
-format-out("Towers of Hanoi (3 disks):\n");
-hanoi(3, "A", "C", "B");
+// ---------- upstream Open Dylan towers-of-hanoi example (verbatim) -----
+// from opendylan/sources/examples/console/towers-of-hanoi/
+//   – classes with required-init-keyword slots
+//   – `<deque>` push/pop, `map`, `range`, generic methods with #key,
+//     next-method, *n-operations* module variable.
+define class <disk> (<object>)
+  constant slot diameter :: <integer>, required-init-keyword: diameter:;
+end class <disk>;
+define function make-disk (integer :: <integer>) => (disk :: <disk>)
+  make(<disk>, diameter: integer)
+end function make-disk;
+
+define class <tower> (<object>)
+  constant slot name :: <string>, required-init-keyword: name:;
+  constant slot disks :: <deque> = make(<deque>);
+end class <tower>;
+define method initialize
+    (tower :: <tower>, #key initial-disks :: <sequence> = #[]) => ()
+  next-method();
+  for (disk in initial-disks)
+    push(tower.disks, disk)
+  end
+end method initialize;
+define method height (tower :: <tower>) => (height :: <integer>)
+  size(tower.disks)
+end method height;
+
+define variable *n-operations* :: <integer> = 0;
+
+define method move-disk (from-tower :: <tower>, to-tower :: <tower>)
+  *n-operations* := *n-operations* + 1;
+  format-out(".");
+  let disk = pop(from-tower.disks);
+  push(to-tower.disks, disk)
+end method move-disk;
+
+define method hanoi-towers
+    (from-tower :: <tower>, to-tower :: <tower>, with-tower :: <tower>,
+     #key count :: <integer> = from-tower.height) => ()
+  if (count >= 1)
+    hanoi-towers(from-tower, with-tower, to-tower, count: count - 1);
+    move-disk(from-tower, to-tower);
+    hanoi-towers(with-tower, to-tower, from-tower, count: count - 1)
+  end
+end method hanoi-towers;
+
+define method print-tower (tower :: <tower>) => ()
+  for (disk :: <disk> in tower.disks, separator = "" then ", ")
+    format-out("%s%d", separator, disk.diameter)
+  end
+end method print-tower;
+
+define method print-towers (#rest towers :: <tower>) => ()
+  for (tower :: <tower> in towers)
+    format-out("  %s: ", tower.name);
+    print-tower(tower);
+    format-out("\n")
+  end;
+  format-out("\n")
+end method print-towers;
+
+define method play-hanoi (height :: <integer>) => ()
+  format-out("Upstream Towers of Hanoi (5 disks, deque-based):\n\n");
+  let disks = map(make-disk, range(from: 1, to: height));
+  let left-tower   = make(<tower>, name: "Left",   initial-disks: disks);
+  let middle-tower = make(<tower>, name: "Middle");
+  let right-tower  = make(<tower>, name: "Right");
+  format-out("Initial position:\n");
+  print-towers(left-tower, middle-tower, right-tower);
+  hanoi-towers(left-tower, middle-tower, right-tower);
+  format-out("took %d operations\n\nFinal position:\n", *n-operations*);
+  print-towers(left-tower, middle-tower, right-tower)
+end method play-hanoi;
+
+play-hanoi(5);
 
 force-out();
