@@ -149,6 +149,21 @@ index b6acc38..77120ef 100644
 +    (back-end :: <llvm-wasm64-back-end>) => (support? :: <boolean>)
 +  #f
 +end method;
+diff --git a/sources/jamfiles/Makefile.in b/sources/jamfiles/Makefile.in
+index aecce8c..199e4e4 100644
+--- a/sources/jamfiles/Makefile.in
++++ b/sources/jamfiles/Makefile.in
+@@ -22,7 +22,9 @@ SCRIPTS         = \
+                   $(srcdir)/x86_64-netbsd-build.jam \
+                   $(srcdir)/arm-linux-build.jam \
+                   $(srcdir)/aarch64-linux-build.jam \
+-                  $(srcdir)/riscv64-linux-build.jam
++                  $(srcdir)/riscv64-linux-build.jam \
++                  $(srcdir)/wasm32-wasi-build.jam \
++                  $(srcdir)/wasm64-wasi-build.jam
+ 
+ .PHONY: install
+ 
 diff --git a/sources/jamfiles/shared-darwin-build.jam b/sources/jamfiles/shared-darwin-build.jam
 index bbfc788..2673b35 100644
 --- a/sources/jamfiles/shared-darwin-build.jam
