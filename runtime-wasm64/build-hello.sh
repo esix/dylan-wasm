@@ -44,4 +44,6 @@ echo "## Linking hello.wasm..."
   -z stack-size=33554432 \
   "$OBJ"/*.o -o "$BUILD/hello.wasm" 2>/tmp/hello-wld && {
   echo "   *** LINKED: $BUILD/hello.wasm ($(ls -la "$BUILD/hello.wasm"|awk '{print $5}') bytes) ***"
+  # Stage the browser harness next to hello.wasm so the user can just serve $BUILD.
+  cp "$SHIM/run-hello.html" "$BUILD/run-hello.html"
 } || { echo "   diagnostics:"; grep -iE "undefined|error|duplicate" /tmp/hello-wld | sort -u | head -40; }
