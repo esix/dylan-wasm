@@ -154,11 +154,90 @@ __int128 __multi3(__int128 a, __int128 b) {
    never exercises integer formatting, so these only need to *exist* to link;
    they trap if actually called. Replace with real long-division when integer
    formatting is needed. */
-__int128 __udivti3(__int128 a, __int128 b) { (void)a;(void)b; report("[trap] __udivti3\n"); __builtin_trap(); }
-__int128 __umodti3(__int128 a, __int128 b) { (void)a;(void)b; report("[trap] __umodti3\n"); __builtin_trap(); }
-__int128 __divti3 (__int128 a, __int128 b) { (void)a;(void)b; report("[trap] __divti3\n");  __builtin_trap(); }
-__int128 __modti3 (__int128 a, __int128 b) { (void)a;(void)b; report("[trap] __modti3\n");  __builtin_trap(); }
-__int128 __lshrti3(__int128 a, int b)      { (void)a;(void)b; report("[trap] __lshrti3\n"); __builtin_trap(); }
+/* 128-bit divisions written in terms of 64-bit ops via the twords union, so
+ * they don't recurse back into themselves through __int128 operators. */
+__int128 __udivti3(__int128 a, __int128 b) {
+  twords nt, dt; nt.all = a; dt.all = b;
+  if (dt.s.high == 0 && dt.s.low == 0) __builtin_trap();
+  if (nt.s.high == 0 && dt.s.high == 0) {
+    twords r; r.s.high = 0; r.s.low = nt.s.low / dt.s.low; return r.all;
+  }
+  twords q = {0}, r = {0};
+  for (int i = 127; i >= 0; i--) {
+    r.s.high = (r.s.high << 1) | (r.s.low >> 63);
+    r.s.low  = (r.s.low  << 1);
+    du_int bit = (i < 64) ? ((nt.s.low >> i) & 1) : ((nt.s.high >> (i - 64)) & 1);
+    r.s.low |= bit;
+    int ge = (r.s.high > dt.s.high) || (r.s.high == dt.s.high && r.s.low >= dt.s.low);
+    if (ge) {
+      du_int borrow = (r.s.low < dt.s.low);
+      r.s.high = r.s.high - dt.s.high - borrow;
+      r.s.low  = r.s.low - dt.s.low;
+      if (i < 64) q.s.low  |= (du_int)1 << i;
+      else        q.s.high |= (du_int)1 << (i - 64);
+    }
+  }
+  return q.all;
+}
+__int128 __umodti3(__int128 a, __int128 b) {
+  twords nt, dt; nt.all = a; dt.all = b;
+  if (dt.s.high == 0 && dt.s.low == 0) __builtin_trap();
+  if (nt.s.high == 0 && dt.s.high == 0) {
+    twords r; r.s.high = 0; r.s.low = nt.s.low % dt.s.low; return r.all;
+  }
+  twords r = {0};
+  for (int i = 127; i >= 0; i--) {
+    r.s.high = (r.s.high << 1) | (r.s.low >> 63);
+    r.s.low  = (r.s.low  << 1);
+    du_int bit = (i < 64) ? ((nt.s.low >> i) & 1) : ((nt.s.high >> (i - 64)) & 1);
+    r.s.low |= bit;
+    int ge = (r.s.high > dt.s.high) || (r.s.high == dt.s.high && r.s.low >= dt.s.low);
+    if (ge) {
+      du_int borrow = (r.s.low < dt.s.low);
+      r.s.high = r.s.high - dt.s.high - borrow;
+      r.s.low  = r.s.low - dt.s.low;
+    }
+  }
+  return r.all;
+}
+__int128 __divti3(__int128 a, __int128 b) {
+  twords at, bt; at.all = a; bt.all = b;
+  int neg_a = ((signed long long)at.s.high) < 0;
+  int neg_b = ((signed long long)bt.s.high) < 0;
+  __int128 ua = neg_a ? (__int128)-(unsigned __int128)a : a;
+  __int128 ub = neg_b ? (__int128)-(unsigned __int128)b : b;
+  __int128 q  = __udivti3(ua, ub);
+  return (neg_a ^ neg_b) ? (__int128)-(unsigned __int128)q : q;
+}
+__int128 __modti3(__int128 a, __int128 b) {
+  twords at, bt; at.all = a; bt.all = b;
+  int neg_a = ((signed long long)at.s.high) < 0;
+  int neg_b = ((signed long long)bt.s.high) < 0;
+  __int128 ua = neg_a ? (__int128)-(unsigned __int128)a : a;
+  __int128 ub = neg_b ? (__int128)-(unsigned __int128)b : b;
+  __int128 r  = __umodti3(ua, ub);
+  return neg_a ? (__int128)-(unsigned __int128)r : r;
+}
+__int128 __lshrti3(__int128 a, int b) {
+  twords in = { .all = a }, r;
+  b &= 127;
+  if (b == 0) return a;
+  if (b & 64) { r.s.high = 0; r.s.low = in.s.high >> (b - 64); }
+  else        { r.s.high = in.s.high >> b;
+                r.s.low  = (in.s.low >> b) | (in.s.high << (64 - b)); }
+  return r.all;
+}
+
+/* int128 → double / float conversion (compiler-rt builtins used by big-integers). */
+double __floattidf(__int128 a) {
+  if (a == 0) return 0.0;
+  int neg = (a < 0);
+  unsigned __int128 ua = neg ? (unsigned __int128)(-a) : (unsigned __int128)a;
+  twords w; w.all = (__int128)ua;
+  double r = (double)w.s.high * 18446744073709551616.0 + (double)w.s.low;
+  return neg ? -r : r;
+}
+float  __floattisf(__int128 a) { return (float)__floattidf(a); }
 
 /* ---------- transcendental math: stubs (hello doesn't use them) ---------- */
 double acos(double x){return x;}  float acosf(float x){return x;}

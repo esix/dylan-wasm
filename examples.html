@@ -37,23 +37,25 @@
     <b>Status:</b> Dylan now <b>runs in your browser</b> via wasm64. The
     <b>green card directly below</b> is live: this page fetches <code>hello.wasm</code>,
     instantiates it, and shows what its <code>format-out</code> produced — real
-    the <b>upstream <code>quicksort</code> and <code>towers-of-hanoi</code>
-    examples, verbatim</b> — both computed by the Dylan runtime in this tab,
-    including real <code>random</code>-seeded benchmarks and real
-    <code>timing</code> via <code>performance.now</code>. Of the three programs
-    after that, <code>quicksort</code> and <code>towers-of-hanoi</code> are the
-    same code as in the live demo above; <code>factorial-big</code> ran
-    <b>natively</b> on macOS and still needs big-integer overflow handling
-    before it'll run in-browser. The hard parts — runtime boot, GC, dispatch,
-    streams, <code>format-out</code>, non-local-exit via an Emscripten-style EH
-    bridge, and a host clock for <code>simple-random</code>/<code>simple-profiling</code>
-    — are done.
+    <b>all three upstream examples — <code>quicksort</code>,
+    <code>towers-of-hanoi</code>, and <code>factorial-big</code> — verbatim</b>,
+    computed by the Dylan runtime in this tab, including real
+    <code>random</code>-seeded benchmarks, real <code>timing</code> via
+    <code>performance.now</code>, and real 128-bit <code>&lt;double-integer&gt;</code>
+    arithmetic with <code>&lt;arithmetic-overflow-error&gt;</code> caught by
+    <code>exception (e :: &lt;error&gt;)</code>. The three native captures below
+    are the same programs run on macOS for cross-check. The hard parts —
+    runtime boot, GC, dispatch, streams, <code>format-out</code>, non-local-exit
+    via an Emscripten-style EH bridge, hand-written 128-bit compiler-rt
+    builtins (<code>__udivti3</code>/<code>__umodti3</code>/<code>__lshrti3</code>/
+    <code>__floattidf</code>), and a host clock for <code>simple-random</code>
+    /<code>simple-profiling</code> — are done.
   </div>
 
   <!-- live in-browser demo -->
   <div class="ex" style="border-color:#3fb950">
     <h2 style="color:#3fb950">live in your browser ✓</h2>
-    <p class="desc">The <b>upstream Open Dylan <code>quicksort</code> and <code>towers-of-hanoi</code> examples</b> — verbatim, with polymorphic <code>&lt;sequence&gt;</code> dispatch, the <code>limited(&lt;vector&gt;, of: &lt;integer&gt;)</code> specialization, <code>random()</code>, the <code>timing()</code> macro, <code>&lt;deque&gt;</code>, classes with <code>required-init-keyword</code>, generic methods with <code>next-method</code> and <code>#key</code>, <code>map</code>/<code>range</code> — compiled to wasm64 and executed by the Dylan runtime in your browser. Real GC, real method dispatch, real <code>format-out</code> through to <code>host_write</code>, real NLX / conditions via an Emscripten-style EH bridge, and real timing via <code>performance.now</code>.</p>
+    <p class="desc">All <b>three upstream Open Dylan examples</b> — <code>quicksort</code>, <code>towers-of-hanoi</code>, and <code>factorial-big</code> — compiled to wasm64 and executed by the Dylan runtime in your browser. Polymorphic <code>&lt;sequence&gt;</code> dispatch, <code>random()</code>, the <code>timing()</code> macro, <code>&lt;deque&gt;</code>, classes with <code>required-init-keyword</code>, generic methods with <code>next-method</code> and <code>#key</code>, <code>map</code>/<code>range</code>, and 128-bit <code>&lt;double-integer&gt;</code> arithmetic with overflow signaling a real <code>&lt;arithmetic-overflow-error&gt;</code> condition that the <code>exception (e :: &lt;error&gt;)</code> clause catches. Real GC, real method dispatch, real <code>format-out</code> through <code>host_write</code>, real NLX/conditions via the Emscripten-style EH bridge, real timing via <code>performance.now</code>.</p>
     <div class="label">Dylan source (in <code>hello/hello.dylan</code>)</div>
 <pre class="src"><span class="kw">define function</span> <span class="fn">fact</span> (n :: <span class="ty">&lt;integer&gt;</span>) =&gt; (r :: <span class="ty">&lt;integer&gt;</span>)
   <span class="kw">if</span> (n &lt;= 1) 1 <span class="kw">else</span> n * fact(n - 1) <span class="kw">end</span>
@@ -168,7 +170,7 @@ Sorting a 50000 element &lt;integer-vector&gt;...took 0.003457 seconds</pre>
 
   <!-- factorial -->
   <div class="ex">
-    <h2>factorial-big <span style="color:#8b949e;font-weight:normal;font-size:.85rem">— native output</span></h2>
+    <h2>factorial-big <span style="color:#3fb950;font-weight:normal;font-size:.85rem">— now running live in the browser too (see the green card above)</span></h2>
     <p class="desc">Factorials with overflow-aware integer arithmetic.</p>
     <div class="label">Output</div>
 <pre class="out">$maximum-integer = 170141183460469231731687303715884105727

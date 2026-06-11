@@ -28,7 +28,7 @@ done
 "$LLVM/clang" "${CFLAGS[@]}" "$SHIM/libc-shim.c"    -o "$OBJ/c__libc-shim.o"
 
 echo "## Lowering Dylan bitcode (per-library prefix; only hello keeps its main)..."
-for L in dylan common-dylan io hello; do
+for L in dylan common-dylan io generic-arithmetic big-integers hello; do
   for bc in "$BUILD"/build/$L/*.bc; do
     base=$(basename "${bc%.bc}")
     # skip the library-level main for everything except the executable (hello)

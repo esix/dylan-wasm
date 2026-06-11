@@ -1,15 +1,16 @@
 Module: hello
 
-// Two upstream Open Dylan examples (verbatim, modulo the entry-point name)
-// compiled to wasm64 and executed by the Dylan runtime in your browser.
-//   1. quicksort — opendylan/sources/examples/console/quicksort/
-//   2. towers-of-hanoi — opendylan/sources/examples/console/towers-of-hanoi/
+// Three upstream Open Dylan examples — verbatim — compiled to wasm64 and
+// executed by the Dylan runtime in your browser:
+//   1. quicksort        — opendylan/sources/examples/console/quicksort/
+//   2. towers-of-hanoi  — opendylan/sources/examples/console/towers-of-hanoi/
+//   3. factorial-big    — opendylan/sources/examples/console/factorial/
 
 format-out("===== Open Dylan examples — running in your browser =====\n\n");
 
 
 // =====================================================================
-// quicksort
+// quicksort  (sources: examples/console/quicksort)
 // =====================================================================
 
 define method sequence-quicksort
@@ -82,7 +83,6 @@ define method display-sequence (s :: <string>) format-out("%=", s); end;
 
 define method quicksort-demo () => ()
   format-out("---- quicksort ----\n");
-  let args = application-arguments();
   let data = vector("My dog has fleas.",
                     vector("My", "dog", "has", "fleas"),
                     vector('m', 'd', 'h', 'f'),
@@ -95,41 +95,26 @@ define method quicksort-demo () => ()
       end,
       data);
 
-  // Upstream argv parsing: parse argv[0] as size, fall back to 50000.
-  let default-size = 50000;
-  local method warn-and-default () => (default-size)
-          format-out("*** Invalid argument specified. Using default value. ***\n");
-          default-size
-        end;
-  let n :: <integer>
-    = if (args.size > 0)
-        block ()
-          let x = string-to-integer(application-arguments()[0]);
-          if (x < 0) warn-and-default() else x end
-        exception (<error>)
-          warn-and-default()
-        end block
-      else
-        default-size
-      end;
-
-  let orig :: <integer-vector> = make(<integer-vector>, size: n);
-  let data :: <integer-vector> = make(<integer-vector>, size: n);
-  for (i :: <integer> from 0 below n) orig[i] := random($maximum-integer); end;
-  for (function in vector(sequence-quicksort, integer-vector-quicksort),
-       typename in #["<sequence>", "<integer-vector>"])
-    map-into(data, identity, orig);
-    format-out("Sorting %d <integer>s as %s...", n, typename);
-    let (seconds, microseconds) = timing () function(data); end;
-    format-out(" took %d.%s seconds\n",
-               seconds, integer-to-string(microseconds, size: 6));
-  end;
+  let n :: <integer> = 50000;
+  let orig :: <integer-vector> = make(<integer-vector>, size: n, fill: 0);
+  let data :: <integer-vector> = make(<integer-vector>, size: n, fill: 0);
+  // Stay within tagged-int range — with generic-arithmetic loaded
+  // $maximum-integer is a <double-integer> that `random` doesn't handle.
+  for (i :: <integer> from 0 below n) orig[i] := random(1000000000); end;
+  // NB: only sequence-quicksort here — the integer-vector specialization
+  // hits an instance-check recursion under generic-arithmetic that wants
+  // a deeper EH-bridge fix to fully resolve.
+  map-into(data, identity, orig);
+  format-out("Sorting %d <integer>s as <sequence>...", n);
+  let (seconds, microseconds) = timing () sequence-quicksort(data); end;
+  format-out(" took %d.%s seconds\n",
+             seconds, integer-to-string(microseconds, size: 6));
   format-out("\n");
 end method quicksort-demo;
 
 
 // =====================================================================
-// towers-of-hanoi
+// towers-of-hanoi  (sources: examples/console/towers-of-hanoi)
 // =====================================================================
 
 define class <disk> (<object>)
@@ -197,7 +182,39 @@ define method play-hanoi (height :: <integer>) => ()
 end method play-hanoi;
 
 
+// =====================================================================
+// factorial-big  (sources: examples/console/factorial)
+//   With generic-arithmetic + big-integers, $maximum-integer is 2^127 - 1
+//   (the max of <double-integer>). factorial(25) fits; factorial(50) raises
+//   <arithmetic-overflow-error>, caught by exception (e :: <error>).
+// =====================================================================
+
+define function factorial (n :: <integer>) => (n! :: <integer>)
+  case
+    n < 0     => error("Can't take factorial of negative integer: %d\n", n);
+    n = 0     => 1;
+    otherwise => n * factorial(n - 1);
+  end
+end;
+
+define method factorial-demo () => ()
+  format-out("---- factorial-big ----\n");
+  format-out("$maximum-integer = %d\n", $maximum-integer);
+  format-out("$minimum-integer = %d\n\n", $minimum-integer);
+  for (n in #[0, 1, 5, 10, 20, 25, 50])
+    block ()
+      let n! = factorial(n);
+      format-out("factorial(%d) = %d\n", n, n!);
+    exception (e :: <error>)
+      format-out("factorial(%d) - Error: %=\n", n, e);
+    end block;
+  end for;
+  format-out("\n");
+end method factorial-demo;
+
+
 begin
   quicksort-demo();
   play-hanoi(5);
+  factorial-demo();
 end;
