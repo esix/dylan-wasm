@@ -101,10 +101,26 @@ define method quicksort-demo () => ()
   // Stay within tagged-int range — with generic-arithmetic loaded
   // $maximum-integer is a <double-integer> that `random` doesn't handle.
   for (i :: <integer> from 0 below n) orig[i] := random(1000000000); end;
-  // NB: only sequence-quicksort here. The integer-vector specialization
-  // tickles an instance-check recursion (Kmasked_class_instanceQVKiI calls
-  // itself) under generic-arithmetic — a separate, dispatch-level issue
-  // distinct from the EH bridge.
+  // NB: only sequence-quicksort runs here. The integer-vector specialization
+  // exposes a real bug in Open Dylan's runtime when generic-arithmetic is
+  // loaded:
+  //
+  //   element-setter on `<integer-vector>` `check-type`s the new value
+  //   against the vector's element-type, here `<abstract-integer>`. That
+  //   dispatches via `instance?` → the IEP installed on the class, which
+  //   is the fast bitmask check `masked-class-instance?`
+  //   (sources/dylan/class.dylan:876). Its body reads
+  //   `class-subtype-bit(c)` and `mm-wrapper-subtype-mask(...)`, slots
+  //   declared `<integer>` in sources/dfmc/modeling/objects.dylan:218,672.
+  //   With generic-arithmetic + big-integers loaded, `<integer>` IS
+  //   `<abstract-integer>`, so each slot accessor's auto-generated
+  //   return-type check fires another `instance?(value, <abstract-integer>)`
+  //   → another `masked-class-instance?` → recursion → stack overflow.
+  //
+  // Fix lives upstream — either tag-check in `masked-class-instance?`
+  // before the wrapper deref, or retype the two slots as `<machine-word>`
+  // so no <abstract-integer> check is generated. Workaround for now:
+  // skip the `<integer-vector>` specialization in the combined demo.
   map-into(data, identity, orig);
   format-out("Sorting %d <integer>s as <sequence>...", n);
   let (seconds, microseconds) = timing () sequence-quicksort(data); end;
