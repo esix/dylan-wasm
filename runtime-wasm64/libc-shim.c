@@ -183,11 +183,19 @@ int   fsync(int fd)            { (void)fd; return 0; }
 int   isatty(int fd)           { (void)fd; return 1; }   /* claim a tty: unbuffered, no seeking */
 long  lseek(int fd, long off, int whence) { (void)fd;(void)off;(void)whence; return -1; }
 long  readlink(const char *p, char *b, unsigned long n) { (void)p;(void)b;(void)n; return -1; }
-long  time(long *t)            { if (t) *t = 0; return 0; }
+/* time() and timer_get_point_in_time() use a host clock so simple-random
+ * gets a real seed and simple-profiling reports real elapsed time. */
+__attribute__((import_module("env"), import_name("host_now_ns")))
+extern uint64_t host_now_ns(void);
+long  time(long *t)            { uint64_t s = host_now_ns() / 1000000000ULL; if (t) *t = (long)s; return (long)s; }
 
 /* ---------- Dylan io syscall wrappers (stubs; stdout is non-seekable) ---------- */
 int   io_errno(void)                 { return 0; }
 char *io_strerror(int e)             { (void)e; return ""; }
 long  io_lseek(int fd, long off, int whence) { (void)fd;(void)off;(void)whence; return -1; }
 int   io_fd_positionable(int fd)     { (void)fd; return 0; }   /* false: stdout not positionable */
-long  timer_get_point_in_time(void)  { return 0; }
+void  timer_get_point_in_time(uint32_t t[2]) {
+  uint64_t now_ns = host_now_ns();
+  t[0] = (uint32_t)(now_ns / 1000000000ULL);  /* seconds */
+  t[1] = (uint32_t)(now_ns % 1000000000ULL);  /* nanoseconds */
+}

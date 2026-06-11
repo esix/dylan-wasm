@@ -70,6 +70,7 @@ const env = {
     return BigInt(Number(len));
   },
   host_throw(exc) { throw new DylanThrow(exc); },
+  host_now_ns() { return BigInt(Math.floor(performance.now() * 1e6)); },
   // For Open Dylan's NLX (block/return-from): the catch typeinfo is a unique
   // marker per block, and the thrown exception is for that exact block. We
   // approximate "match" by always returning the thrown value and setting

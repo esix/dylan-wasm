@@ -1,58 +1,119 @@
 Module: hello
 
-format-out("Hello from Dylan — running in your browser via wasm64!\n");
-format-out("Open Dylan compiled to wasm64. Runtime, GC, dispatch, NLX — live.\n\n");
+// Two upstream Open Dylan examples (verbatim, modulo the entry-point name)
+// compiled to wasm64 and executed by the Dylan runtime in your browser.
+//   1. quicksort — opendylan/sources/examples/console/quicksort/
+//   2. towers-of-hanoi — opendylan/sources/examples/console/towers-of-hanoi/
 
-// ---------- factorial ----------
-define function fact (n :: <integer>) => (r :: <integer>)
-  if (n <= 1) 1 else n * fact(n - 1) end
-end;
-format-out("factorial(5)  = %d\n",   fact(5));
-format-out("factorial(10) = %d\n",   fact(10));
-format-out("factorial(12) = %d\n\n", fact(12));
+format-out("===== Open Dylan examples — running in your browser =====\n\n");
 
-// ---------- fibonacci ----------
-define function fib (n :: <integer>) => (r :: <integer>)
-  if (n < 2) n else fib(n - 1) + fib(n - 2) end
-end;
-format-out("fib(10) = %d\n",   fib(10));
-format-out("fib(15) = %d\n\n", fib(15));
 
-// ---------- integer-to-string (uses block/return internally; needs working NLX) ----------
-format-out("integer-to-string(12345) = ");
-format-out(integer-to-string(12345));
-format-out("\n");
-format-out("integer-to-string(-42)   = ");
-format-out(integer-to-string(-42));
-format-out("\n\n");
+// =====================================================================
+// quicksort
+// =====================================================================
 
-// ---------- in-place sort (uses NLX via for-loop iteration protocol) ----------
-define function sort! (v :: <vector>) => ()
-  let n :: <integer> = v.size;
-  for (i :: <integer> from 0 below n - 1)
-    for (j :: <integer> from i + 1 below n)
-      if (v[j] < v[i])
-        let t = v[i];
-        v[i] := v[j];
-        v[j] := t;
-      end if;
-    end for;
+define method sequence-quicksort
+    (v :: <sequence>) => (sorted-v :: <sequence>)
+  local method exchange (m, n) => ()
+	  let t = v[m]; v[m] := v[n]; v[n] := t
+	end method exchange,
+        method partition (lo, hi, x) => (i, j)
+	  let i = for (i from lo to hi, while: v[i] < x) finally i end;
+	  let j = for (j from hi to lo by -1, while: x < v[j]) finally j end;
+	  if (i <= j)
+	    exchange(i, j);
+	    partition(i + 1, j - 1, x)
+	  else
+	    values(i, j)
+	  end
+	end method partition,
+        method sort (lo, hi) => ()
+	  if (lo < hi)
+	    let (i, j) = partition(lo, hi, v[round/(lo + hi, 2)]);
+	    sort(lo, j);
+	    sort(i, hi)
+	  end
+	end method sort;
+  sort(0, v.size - 1);
+  v
+end method sequence-quicksort;
+
+define constant <integer-vector> = limited(<vector>, of: <integer>);
+
+define method integer-vector-quicksort
+    (v :: <integer-vector>) => (sorted-v :: <integer-vector>)
+  local method exchange (m :: <integer>, n :: <integer>) => ()
+	  let t = v[m]; v[m] := v[n]; v[n] := t
+	end method exchange,
+        method partition
+	    (lo :: <integer>, hi :: <integer>, x :: <integer>)
+	 => (i :: <integer>, j :: <integer>)
+	  let i :: <integer>
+	    = for (i :: <integer> from lo to hi, while: v[i] < x) finally i end;
+	  let j :: <integer>
+	    = for (j :: <integer> from hi to lo by -1, while: x < v[j]) finally j end;
+	  if (i <= j)
+	    exchange(i, j);
+	    partition(i + 1, j - 1, x)
+	  else
+	    values(i, j)
+	  end
+	end method partition,
+        method sort (lo :: <integer>, hi :: <integer>) => ()
+	  when (lo < hi)
+	    let (i, j) = partition(lo, hi, v[round/(lo + hi, 2)]);
+	    sort(lo, j);
+	    sort(i, hi)
+	  end;
+	end method sort;
+  sort(0, v.size - 1);
+  v
+end method integer-vector-quicksort;
+
+define method display-sequence (s :: <sequence>)
+  format-out("#[");
+  let length :: <integer> = size(s);
+  for (elem in s, i from 1)
+    format-out("%s%s", elem, if (i < length) ", " else "" end);
   end for;
+  format-out("]");
 end;
-let nums = vector(5, 3, 8, 1, 9, 2, 7, 4, 6);
-format-out("before sort: ");
-for (x in nums) format-out("%d ", x); end for;
-format-out("\n");
-sort!(nums);
-format-out("after sort:  ");
-for (x in nums) format-out("%d ", x); end for;
-format-out("\n\n");
+define method display-sequence (s :: <string>) format-out("%=", s); end;
 
-// ---------- upstream Open Dylan towers-of-hanoi example (verbatim) -----
-// from opendylan/sources/examples/console/towers-of-hanoi/
-//   – classes with required-init-keyword slots
-//   – `<deque>` push/pop, `map`, `range`, generic methods with #key,
-//     next-method, *n-operations* module variable.
+define method quicksort-demo () => ()
+  format-out("---- quicksort ----\n");
+  let data = vector("My dog has fleas.",
+                    vector("My", "dog", "has", "fleas"),
+                    vector('m', 'd', 'h', 'f'),
+                    vector(2, 4, 1, 3));
+  map(method (v)
+        display-sequence(v);
+        format-out(" sorted is ");
+        display-sequence(sequence-quicksort(v));
+        format-out("\n");
+      end,
+      data);
+
+  let n = 1000;
+  let orig :: <integer-vector> = make(<integer-vector>, size: n);
+  let data :: <integer-vector> = make(<integer-vector>, size: n);
+  for (i :: <integer> from 0 below n) orig[i] := random($maximum-integer); end;
+  for (function in vector(sequence-quicksort, integer-vector-quicksort),
+       typename in #["<sequence>", "<integer-vector>"])
+    map-into(data, identity, orig);
+    format-out("Sorting %d <integer>s as %s...", n, typename);
+    let (seconds, microseconds) = timing () function(data); end;
+    format-out(" took %d.%s seconds\n",
+               seconds, integer-to-string(microseconds, size: 6));
+  end;
+  format-out("\n");
+end method quicksort-demo;
+
+
+// =====================================================================
+// towers-of-hanoi
+// =====================================================================
+
 define class <disk> (<object>)
   constant slot diameter :: <integer>, required-init-keyword: diameter:;
 end class <disk>;
@@ -67,9 +128,7 @@ end class <tower>;
 define method initialize
     (tower :: <tower>, #key initial-disks :: <sequence> = #[]) => ()
   next-method();
-  for (disk in initial-disks)
-    push(tower.disks, disk)
-  end
+  for (disk in initial-disks) push(tower.disks, disk) end
 end method initialize;
 define method height (tower :: <tower>) => (height :: <integer>)
   size(tower.disks)
@@ -99,18 +158,15 @@ define method print-tower (tower :: <tower>) => ()
     format-out("%s%d", separator, disk.diameter)
   end
 end method print-tower;
-
 define method print-towers (#rest towers :: <tower>) => ()
   for (tower :: <tower> in towers)
-    format-out("  %s: ", tower.name);
-    print-tower(tower);
-    format-out("\n")
+    format-out("  %s: ", tower.name); print-tower(tower); format-out("\n")
   end;
   format-out("\n")
 end method print-towers;
 
 define method play-hanoi (height :: <integer>) => ()
-  format-out("Upstream Towers of Hanoi (5 disks, deque-based):\n\n");
+  format-out("---- towers-of-hanoi (%d disks) ----\n", height);
   let disks = map(make-disk, range(from: 1, to: height));
   let left-tower   = make(<tower>, name: "Left",   initial-disks: disks);
   let middle-tower = make(<tower>, name: "Middle");
@@ -122,6 +178,8 @@ define method play-hanoi (height :: <integer>) => ()
   print-towers(left-tower, middle-tower, right-tower)
 end method play-hanoi;
 
-play-hanoi(5);
 
-force-out();
+begin
+  quicksort-demo();
+  play-hanoi(5);
+end;

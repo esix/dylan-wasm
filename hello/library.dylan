@@ -7,5 +7,7 @@ end library;
 
 define module hello
   use common-dylan;
-  use format-out;
+  use simple-format;
+  use simple-random;
+  use simple-profiling;
 end module;
