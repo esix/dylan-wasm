@@ -21,21 +21,20 @@ its well-tested 64-bit path. memory64 + table64 run in current browsers (Chrome
 Two repos, by design:
 
 - **this meta-repo** — the wasm runtime shim, build orchestration, harnesses,
-  docs, and a test project. It does *not* vendor Open Dylan.
-- **[`opendylan/`](opendylan) — a git submodule** pointing at our **fork** of
-  Open Dylan on the `wasm64` branch, which carries the compiler changes (the
-  WebAssembly LLVM targets + runtime/build support) as real commits on top of
-  upstream `3b2b904`. This is what you edit to modify the compiler.
+  the test project, and the **patch** carrying the Open Dylan compiler changes.
+- **[`opendylan/`](opendylan) — a git submodule pointing at upstream**
+  `dylan-lang/opendylan`, pinned at commit `3b2b904`. `setup.sh` applies
+  `patches/opendylan-wasm.patch` to it during build (idempotently), so the
+  submodule stays unmodified upstream while our changes live as a tracked diff.
 
 | Path | What |
 |---|---|
-| `opendylan/` *(submodule)* | Open Dylan fork, `wasm64` branch — the compiler. Edit here to change codegen. |
+| `opendylan/` *(submodule, upstream pinned)* | Vanilla Open Dylan @ `3b2b904`. `setup.sh` patches it at build time. Submodule is configured `ignore = dirty` so the patched working tree doesn't appear as "modified content" in `git status`. |
+| `patches/opendylan-wasm.patch` | Our compiler changes: WebAssembly (wasm32/wasm64) LLVM back-end targets, default-sections fix, runtime ABI fixes, Apple-Silicon codesign fix, wasm build scripts + registries. |
 | `runtime-wasm64/` | Freestanding wasm64 runtime shim + build scripts: `libc-shim.c`, `wasm-threads.c`, `fakegc/gc/gc.h`, `build-wasm64.sh` (link a runtime `.wasm`), `build-hello.sh` (link an executable), `rebuild-all.sh` (full rebuild), `run-hello.html`/`run-hello.mjs` (browser/node harness). |
 | `hello/` | Minimal Dylan test program (sources only). |
 | `examples.html` | Showcase of native example programs and their output. |
-| `setup.sh` | One-command build (bootstrap + stage-1 compiler + wasm runtime). |
-| `patches/opendylan-wasm.patch` | The compiler changes as a flat diff (generated from the fork) for review / non-submodule use. |
-| `DESIGN.md` | Architecture, findings, gotchas, roadmap. |
+| `setup.sh` | One-command build (bootstrap + apply patch + stage-1 compiler + wasm runtime). |
 
 Git-ignored: `bootstrap/` (downloaded toolchain), `*.tar.bz2`, all `_build*` outputs.
 
@@ -62,22 +61,19 @@ Dev loop after editing the compiler (`opendylan/sources/...`): `runtime-wasm64/r
 
 ## Modifying the compiler
 
-The compiler lives in the `opendylan/` submodule on the `wasm64` branch. Edit
+After `./setup.sh`, the submodule's working tree is the patched compiler. Edit
 e.g. `opendylan/sources/dfmc/llvm-back-end/llvm-targets.dylan`, run
-`runtime-wasm64/rebuild-all.sh`, reload the browser. Commit inside `opendylan/`
-to your fork; then `git add opendylan` here to record the new submodule commit.
+`runtime-wasm64/rebuild-all.sh`, reload the browser.
 
-### One-time fork + submodule setup (maintainer)
-
-The submodule must point at a fork (upstream can't hold our commits). To create it:
+Roll your edits back into the patch:
 
 ```sh
-# 1. fork dylan-lang/opendylan on GitHub (web UI or: gh repo fork dylan-lang/opendylan)
-# 2. push our prepared wasm64 branch (already committed in ./opendylan):
-git -C opendylan remote add fork git@github.com:<you>/opendylan.git
-git -C opendylan push fork wasm64
-# 3. wire it as the submodule of this repo (-f overrides the placeholder
-#    /opendylan/ .gitignore entry; remove that line afterwards):
-git submodule add -f -b wasm64 git@github.com:<you>/opendylan.git opendylan
-git commit -m "Add opendylan fork (wasm64) as submodule"
+( cd opendylan && git diff -- \
+    sources/dfmc/llvm-back-end \
+    sources/jamfiles \
+    sources/registry/wasm32-wasi sources/registry/wasm64-wasi \
+    sources/lib/run-time/boehm-collector.c ) > patches/opendylan-wasm.patch
+git add patches/opendylan-wasm.patch && git commit
 ```
+
+If you ever want to bump the upstream pin: `cd opendylan && git fetch && git checkout <new-sha>`, re-base the patch onto the new tree (resolve conflicts in `git apply` output), then commit the new submodule SHA here (`git add opendylan`).

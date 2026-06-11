@@ -1,0 +1,4 @@
+[submodule "opendylan"]
+	path = opendylan
+	url = https://github.com/dylan-lang/opendylan.git
+	ignore = dirty

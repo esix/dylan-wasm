@@ -39,8 +39,20 @@ PY
   echo "   patched bootstrap codesign step"
 fi
 
-echo "## [2/4] Open Dylan submodules..."
+echo "## [2/4] Open Dylan submodules + apply wasm patch..."
 git -C "$ROOT/opendylan" submodule update --init --depth 1 >/dev/null
+# Apply patches/opendylan-wasm.patch (idempotently: check forward, then reverse).
+PATCH="$ROOT/patches/opendylan-wasm.patch"
+if git -C "$ROOT/opendylan" apply --check "$PATCH" 2>/dev/null; then
+  git -C "$ROOT/opendylan" apply "$PATCH"
+  echo "   applied opendylan-wasm.patch"
+elif git -C "$ROOT/opendylan" apply --reverse --check "$PATCH" 2>/dev/null; then
+  echo "   opendylan-wasm.patch already applied"
+else
+  echo "ERROR: opendylan-wasm.patch does not apply cleanly to the submodule's tree." >&2
+  echo "       Submodule must be at the patch's base commit (see patches/opendylan-wasm.patch header)." >&2
+  exit 1
+fi
 
 echo "## [3/4] Building stage-1 compiler (with wasm targets)..."
 export PATH="$REL/bin:$PATH"
