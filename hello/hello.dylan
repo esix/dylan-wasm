@@ -101,31 +101,22 @@ define method quicksort-demo () => ()
   // Stay within tagged-int range — with generic-arithmetic loaded
   // $maximum-integer is a <double-integer> that `random` doesn't handle.
   for (i :: <integer> from 0 below n) orig[i] := random(1000000000); end;
-  // NB: only sequence-quicksort runs here. The integer-vector specialization
-  // exposes a real bug in Open Dylan's runtime when generic-arithmetic is
-  // loaded:
-  //
-  //   element-setter on `<integer-vector>` `check-type`s the new value
-  //   against the vector's element-type, here `<abstract-integer>`. That
-  //   dispatches via `instance?` → the IEP installed on the class, which
-  //   is the fast bitmask check `masked-class-instance?`
-  //   (sources/dylan/class.dylan:876). Its body reads
-  //   `class-subtype-bit(c)` and `mm-wrapper-subtype-mask(...)`, slots
-  //   declared `<integer>` in sources/dfmc/modeling/objects.dylan:218,672.
-  //   With generic-arithmetic + big-integers loaded, `<integer>` IS
-  //   `<abstract-integer>`, so each slot accessor's auto-generated
-  //   return-type check fires another `instance?(value, <abstract-integer>)`
-  //   → another `masked-class-instance?` → recursion → stack overflow.
-  //
-  // Fix lives upstream — either tag-check in `masked-class-instance?`
-  // before the wrapper deref, or retype the two slots as `<machine-word>`
-  // so no <abstract-integer> check is generated. Workaround for now:
-  // skip the `<integer-vector>` specialization in the combined demo.
-  map-into(data, identity, orig);
-  format-out("Sorting %d <integer>s as <sequence>...", n);
-  let (seconds, microseconds) = timing () sequence-quicksort(data); end;
-  format-out(" took %d.%s seconds\n",
-             seconds, integer-to-string(microseconds, size: 6));
+  // Only sequence-quicksort here. The integer-vector specialization no
+  // longer hits the `masked-class-instance?` recursion (now patched in
+  // objects.dylan), but exposes a *different* bug: quicksort's `partition`
+  // method makes a tail-recursive `partition(i + 1, j - 1, x)` call that
+  // wasm doesn't optimize to a loop, blowing the stack on 50K elements
+  // after ~2500 recursive frames. To run the typed specialization we'd
+  // need either compiler support for emitting wasm tail-call instructions
+  // (Chrome 112+ supports them) or hand-converting partition to a loop.
+  for (function in vector(sequence-quicksort),
+       typename in #["<sequence>"])
+    map-into(data, identity, orig);
+    format-out("Sorting %d <integer>s as %s...", n, typename);
+    let (seconds, microseconds) = timing () function(data); end;
+    format-out(" took %d.%s seconds\n",
+               seconds, integer-to-string(microseconds, size: 6));
+  end;
   format-out("\n");
 end method quicksort-demo;
 

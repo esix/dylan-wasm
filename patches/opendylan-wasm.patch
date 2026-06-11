@@ -149,6 +149,35 @@ index b6acc38..77120ef 100644
 +    (back-end :: <llvm-wasm64-back-end>) => (support? :: <boolean>)
 +  #f
 +end method;
+diff --git a/sources/dfmc/modeling/objects.dylan b/sources/dfmc/modeling/objects.dylan
+index 8b35292..fcf8116 100644
+--- a/sources/dfmc/modeling/objects.dylan
++++ b/sources/dfmc/modeling/objects.dylan
+@@ -215,7 +215,12 @@ define sealed primary &class <mm-wrapper> (<object>)
+   &slot mm-wrapper-implementation-class :: <implementation-class>,
+      required-init-keyword: implementation-class:;
+   // Mask of all inherited subtype bits.
+-  &slot mm-wrapper-subtype-mask :: <integer>, init-value: 0,
++  // wasm port: typed <object> (was <integer>) so the slot getter's return-type
++  // check resolves to <object>-class-instance? (always #t) instead of
++  // masked-class-instance? — otherwise, with generic-arithmetic loaded,
++  // <integer> = <abstract-integer>, and that check recurses through
++  // masked-class-instance? which reads this exact slot.
++  &slot mm-wrapper-subtype-mask :: <object>, init-value: 0,
+      init-keyword: subtype-mask:;
+   /* raw */ &slot mm-wrapper-fixed-part :: <raw-machine-word>,
+      init-keyword: fixed-part:;
+@@ -669,7 +674,9 @@ define compiler-class-open primary &class <class> (<type>)
+     init-keyword: debug-name:, init-value: #f;
+   &slot class-implementation-class :: <implementation-class>;
+   // This is a mask (not bit index) of at most one bit.
+-  &slot class-subtype-bit :: <integer>, init-value: 0, init-keyword: subtype-bit-mask:;
++  // wasm port: typed <object> (was <integer>) — see mm-wrapper-subtype-mask
++  // for the recursion this avoids when generic-arithmetic is loaded.
++  &slot class-subtype-bit :: <object>, init-value: 0, init-keyword: subtype-bit-mask:;
+   &computed-slot-no-default class-module :: <module>,
+     init-keyword: module:,
+     init-value: $runtime-module;
 diff --git a/sources/jamfiles/Makefile.in b/sources/jamfiles/Makefile.in
 index aecce8c..199e4e4 100644
 --- a/sources/jamfiles/Makefile.in
