@@ -82,6 +82,7 @@ define method display-sequence (s :: <string>) format-out("%=", s); end;
 
 define method quicksort-demo () => ()
   format-out("---- quicksort ----\n");
+  let args = application-arguments();
   let data = vector("My dog has fleas.",
                     vector("My", "dog", "has", "fleas"),
                     vector('m', 'd', 'h', 'f'),
@@ -94,7 +95,24 @@ define method quicksort-demo () => ()
       end,
       data);
 
-  let n = 1000;
+  // Upstream argv parsing: parse argv[0] as size, fall back to 50000.
+  let default-size = 50000;
+  local method warn-and-default () => (default-size)
+          format-out("*** Invalid argument specified. Using default value. ***\n");
+          default-size
+        end;
+  let n :: <integer>
+    = if (args.size > 0)
+        block ()
+          let x = string-to-integer(application-arguments()[0]);
+          if (x < 0) warn-and-default() else x end
+        exception (<error>)
+          warn-and-default()
+        end block
+      else
+        default-size
+      end;
+
   let orig :: <integer-vector> = make(<integer-vector>, size: n);
   let data :: <integer-vector> = make(<integer-vector>, size: n);
   for (i :: <integer> from 0 below n) orig[i] := random($maximum-integer); end;

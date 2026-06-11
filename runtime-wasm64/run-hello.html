@@ -99,11 +99,32 @@ const rows = items => items.map(([cls,k,v]) =>
   tempRet0Addr = Number(e.tempRet0?.value || 0n);
   const loadMs = Math.round(performance.now() - t0);
 
+  // Wire argv: write argc i64 pointers + NUL-terminated UTF-8 strings to a
+  // safe high-memory address (256 MB), well above the bump allocator's
+  // working region (__heap_base ≈ 35 MB) and below initial-memory (512 MB).
+  // primitive_strlen does word-aligned reads, so each string must sit in
+  // valid memory with at least 7 readable bytes before it — we 8-byte-align
+  // every string for simplicity.
+  const args = ["hello", "50000"];
+  const argvBase = 0x10000000;
+  const memU8 = new Uint8Array(memory.buffer);
+  const memU64 = new BigUint64Array(memory.buffer);
+  const enc = new TextEncoder();
+  let strAddr = (argvBase + args.length * 8 + 7) & ~7;
+  const argvPtrs = [];
+  for (const a of args) {
+    const bytes = enc.encode(a + '\0');
+    memU8.set(bytes, strAddr);
+    argvPtrs.push(BigInt(strAddr));
+    strAddr = (strAddr + bytes.length + 7) & ~7;
+  }
+  for (let i = 0; i < argvPtrs.length; i++)
+    memU64[(argvBase >>> 3) + i] = argvPtrs[i];
+
   let outcome, trace = '', cls = 'stop-card';
   try {
-    // argv must be non-NULL so _Init_hello_'s `TargvT != null` guard
-    // lets the top-level expression (and library init bodies) actually run.
-    const rc = e.main(0, 1n);
+    // main(argc :: i32, argv :: i64). i32 needs a Number; i64 needs BigInt.
+    const rc = e.main(args.length, BigInt(argvBase));
     outcome = ['ok','main returned', String(rc)]; cls = 'ok-card';
   } catch (err) {
     const frames = (err.stack||'').split('\n')

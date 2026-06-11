@@ -120,7 +120,23 @@ const env = {
     memory = instance.exports.memory;
     threwAddr   = Number(instance.exports.__THREW__?.value || 0n);
     tempRet0Addr = Number(instance.exports.tempRet0?.value || 0n);
-    instance.exports.main(0, 1n);
+    // Wire argv at 256 MB (well above __heap_base ≈ 35 MB, well below 512 MB).
+    const args = ["hello", "50000"];
+    const argvBase = 0x10000000;
+    const memU8 = new Uint8Array(memory.buffer);
+    const memU64 = new BigUint64Array(memory.buffer);
+    const enc = new TextEncoder();
+    let strAddr = (argvBase + args.length * 8 + 7) & ~7;
+    const argvPtrs = [];
+    for (const a of args) {
+      const bytes = enc.encode(a + '\0');
+      memU8.set(bytes, strAddr);
+      argvPtrs.push(BigInt(strAddr));
+      strAddr = (strAddr + bytes.length + 7) & ~7;
+    }
+    for (let i = 0; i < argvPtrs.length; i++)
+      memU64[(argvBase >>> 3) + i] = argvPtrs[i];
+    instance.exports.main(args.length, BigInt(argvBase));
     el.textContent = dylanOut || '(no output)';
   } catch (e) {
     el.textContent = '⚠ ' + e.message + '\n(this page expects to be served from the repo root so it can fetch opendylan/_build-wasm64/hello.wasm)';
