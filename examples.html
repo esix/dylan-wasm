@@ -34,13 +34,16 @@
   <p class="sub">Three console programs built with Open Dylan and executed by the compiled runtime + GC.</p>
 
   <div class="banner" style="border-color:#3fb950;color:#56d364">
-    <b>Status:</b> Dylan now <b>runs in your browser</b> via wasm64 —
-    <a href="run-hello.html">live demo (factorial / fib / Towers of Hanoi)</a>.
-    The bigger programs below ran <b>natively</b>; bringing them to the browser
-    needs a few more runtime pieces (real non-local-exit / unwind, big-integer
-    overflow handling, <code>application-arguments</code>, <code>random</code>,
-    <code>timing</code>). The hard part — booting the runtime, GC, dispatch,
-    streams, format-out — is done.
+    <b>Status:</b> Dylan now <b>runs in your browser</b> via wasm64. The
+    <b>green card directly below</b> is live: this page fetches <code>hello.wasm</code>,
+    instantiates it, and shows what its <code>format-out</code> produced — real
+    factorial, Fibonacci, and 3-disk Towers of Hanoi computed by the Dylan
+    runtime in this tab. The <b>three programs after that</b> are upstream Open Dylan
+    examples whose output you see was captured from a <b>native</b> run on macOS;
+    they need a few more runtime pieces before they'll run in the browser too
+    (real non-local-exit / unwind, big-integer overflow handling,
+    <code>application-arguments</code>, <code>random</code>, <code>timing</code>).
+    The hard part — booting the runtime, GC, dispatch, streams, format-out — is done.
   </div>
 
   <!-- live in-browser demo -->
@@ -90,7 +93,7 @@ const imports = { env: { host_write(fd, ptr, len) {
 
   <!-- quicksort -->
   <div class="ex">
-    <h2>quicksort</h2>
+    <h2>quicksort <span style="color:#8b949e;font-weight:normal;font-size:.85rem">— native output</span></h2>
     <p class="desc">Generic in-place quicksort over any sequence — strings, vectors of symbols/characters/integers — plus a 50k-element benchmark.</p>
     <div class="label">Dylan source</div>
 <pre class="src"><span class="kw">define method</span> <span class="fn">sequence-quicksort</span>
@@ -111,7 +114,7 @@ Sorting a 50000 element &lt;integer-vector&gt;...took 0.003457 seconds</pre>
 
   <!-- factorial -->
   <div class="ex">
-    <h2>factorial-big</h2>
+    <h2>factorial-big <span style="color:#8b949e;font-weight:normal;font-size:.85rem">— native output</span></h2>
     <p class="desc">Factorials with overflow-aware integer arithmetic.</p>
     <div class="label">Output</div>
 <pre class="out">$maximum-integer = 170141183460469231731687303715884105727
@@ -121,7 +124,7 @@ factorial(50) - Error: Integer overflow (result too large for this representatio
 
   <!-- hanoi -->
   <div class="ex">
-    <h2>towers-of-hanoi</h2>
+    <h2>towers-of-hanoi <span style="color:#8b949e;font-weight:normal;font-size:.85rem">— native output (the live demo above also includes a smaller 3-disk hanoi)</span></h2>
     <p class="desc">Classic recursion: move 5 disks in 2⁵−1 = 31 moves.</p>
     <div class="label">Dylan source</div>
 <pre class="src"><span class="kw">define method</span> <span class="fn">hanoi</span>
