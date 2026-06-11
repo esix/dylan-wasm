@@ -37,13 +37,15 @@
     <b>Status:</b> Dylan now <b>runs in your browser</b> via wasm64. The
     <b>green card directly below</b> is live: this page fetches <code>hello.wasm</code>,
     instantiates it, and shows what its <code>format-out</code> produced — real
-    factorial, Fibonacci, and 3-disk Towers of Hanoi computed by the Dylan
-    runtime in this tab. The <b>three programs after that</b> are upstream Open Dylan
-    examples whose output you see was captured from a <b>native</b> run on macOS;
-    they need a few more runtime pieces before they'll run in the browser too
-    (real non-local-exit / unwind, big-integer overflow handling,
-    <code>application-arguments</code>, <code>random</code>, <code>timing</code>).
-    The hard part — booting the runtime, GC, dispatch, streams, format-out — is done.
+    factorial, Fibonacci, <code>integer-to-string</code>, an in-place sort,
+    and 3-disk Towers of Hanoi computed by the Dylan runtime in this tab.
+    The <b>three programs after that</b> are upstream Open Dylan examples whose
+    output you see was captured from a <b>native</b> run on macOS; they need a
+    few more runtime pieces before they'll run in the browser too
+    (<code>application-arguments</code>, <code>random</code>, <code>timing</code>,
+    big-integer overflow handling). The hard parts — booting the runtime, GC,
+    dispatch, streams, <code>format-out</code>, and non-local-exit via an
+    Emscripten-style EH bridge — are done.
   </div>
 
   <!-- live in-browser demo -->
@@ -68,20 +70,53 @@
     <div class="label">Output (live, captured from this browser tab)</div>
 <pre class="out" id="live-out">loading wasm64 module…</pre>
 <script type="module">
+// Emscripten-style EH bridge for Open Dylan's NLX. See run-hello.html for details.
 const dec = new TextDecoder();
-let dylanOut = ''; let memory;
-const imports = { env: { host_write(fd, ptr, len) {
-  dylanOut += dec.decode(new Uint8Array(memory.buffer, Number(ptr), Number(len)));
-  return BigInt(Number(len));
-} } };
+let dylanOut = ''; let memory; let instance;
+let threwAddr = 0, tempRet0Addr = 0;
+let jsThrewValue = 0n;
+class DylanThrow extends Error { constructor(exc) { super('dylan'); this.exc = exc; } }
+function setTempRet0(v) { new Int32Array(memory.buffer)[tempRet0Addr >>> 2] = v | 0; }
+function makeInvoke(name) {
+  const isVoid = (name[7] === 'v');
+  return function (...all) {
+    const idx = all[0];                       // wasm64: keep BigInt for Table.get
+    const args = all.slice(1);
+    try {
+      return instance.exports.__indirect_function_table.get(idx)(...args);
+    } catch (e) {
+      if (e instanceof DylanThrow) {
+        new Int32Array(memory.buffer)[threwAddr >>> 2] = 1;
+        jsThrewValue = e.exc;
+        return isVoid ? undefined : 0n;
+      }
+      throw e;
+    }
+  };
+}
+const env = {
+  host_write(fd, ptr, len) {
+    dylanOut += dec.decode(new Uint8Array(memory.buffer, Number(ptr), Number(len)));
+    return BigInt(Number(len));
+  },
+  host_throw(exc) { throw new DylanThrow(exc); },
+  __cxa_find_matching_catch_2()  { setTempRet0(0);             return jsThrewValue; },
+  __cxa_find_matching_catch_3(t) { setTempRet0(Number(t) | 0); return jsThrewValue; },
+};
+['invoke_vj','invoke_vjjj','invoke_vjjjj','invoke_vjjjjj','invoke_vjjjjjj',
+ 'invoke_vjjjjjjj','invoke_vjjjjjjjj','invoke_vjjjjjjjjj','invoke_vjjjjjjjjjj',
+ 'invoke_jijj','invoke_jiji'].forEach(n => env[n] = makeInvoke(n));
 (async () => {
   const el = document.getElementById('live-out');
   try {
     const r = await fetch('opendylan/_build-wasm64/hello.wasm', {cache: 'no-store'});
     if (!r.ok) throw new Error('no hello.wasm — run setup.sh first');
     const buf = await r.arrayBuffer();
-    const { instance } = await WebAssembly.instantiate(buf, imports);
+    const { instance: inst } = await WebAssembly.instantiate(buf, { env });
+    instance = inst;
     memory = instance.exports.memory;
+    threwAddr   = Number(instance.exports.__THREW__?.value || 0n);
+    tempRet0Addr = Number(instance.exports.tempRet0?.value || 0n);
     instance.exports.main(0, 1n);
     el.textContent = dylanOut || '(no output)';
   } catch (e) {

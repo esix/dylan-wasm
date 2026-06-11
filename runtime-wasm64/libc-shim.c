@@ -73,7 +73,36 @@ void  EstablishDylanExceptionHandlers(void)       { }
 void  primitive_initialize_thread_variables(void) { }
 void  primitive_reset_float_environment(void)     { }
 void *get_current_thread_handle(void)             { return 0; }
-void  _Unwind_RaiseException(void *exc)           { (void)exc; report("[trap] _Unwind_RaiseException\n"); __builtin_trap(); }
+/* _Unwind_RaiseException is called by primitive_nlx (llvm-nlx.c). On
+ * Emscripten EH, we throw a JS exception via the host so it propagates
+ * through wasm frames until caught by an invoke_* wrapper. */
+__attribute__((import_module("env"), import_name("host_throw")))
+extern _Noreturn void host_throw(void *exc);
+
+/* Itanium ABI: returns _Unwind_Reason_Code (int). The host_throw never
+ * actually returns, so the trailing `return` is just there to make the
+ * wasm signature match what llvm-nlx.c's IR call expects. */
+int _Unwind_RaiseException(void *exc) { host_throw(exc); return 0; }
+
+/* ---------- Emscripten-style EH helpers (--enable-emscripten-cxx-exceptions) ----------
+ * llc rewrites Itanium `invoke` -> calls to env.invoke_<sig> and `resume` ->
+ * __resumeException; landingpad sites read __THREW__/__threwValue and use
+ * llvm_eh_typeid_for to match catch clauses against __cxa_find_matching_catch_*.
+ * __THREW__ and __threwValue live in linear memory; JS reads/writes them
+ * via the exported addresses. */
+__attribute__((used)) int __THREW__ = 0;
+__attribute__((used)) int __threwValue = 0;
+
+/* getTempRet0 returns the catch typeID that __cxa_find_matching_catch_*
+ * wrote into the shared `tempRet0` location; landingpad code reads it
+ * to do the type-compare. JS exports tempRet0's address and writes it. */
+__attribute__((used)) int tempRet0 = 0;
+int  getTempRet0(void)                    { return tempRet0; }
+int  llvm_eh_typeid_for(void *typeinfo)   { return (int)(unsigned long)typeinfo; }
+
+/* __resumeException re-raises the previously caught exception (Itanium
+ * `resume`). We funnel back through host_throw for the same propagation. */
+void __resumeException(void *exc)         { host_throw(exc); }
 
 /* ---------- compiler-rt 128-bit builtins (no wasm compiler-rt available) ----------
    Standard algorithms; union access only (never multiply/shift __int128 directly,

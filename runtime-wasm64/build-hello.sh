@@ -33,14 +33,15 @@ for L in dylan common-dylan io hello; do
     base=$(basename "${bc%.bc}")
     # skip the library-level main for everything except the executable (hello)
     if [ "$base" = "_main" ] && [ "$L" != "hello" ]; then continue; fi
-    "$LLVM/llc" -mtriple=wasm64-unknown-wasi -filetype=obj -O2 "$bc" -o "$OBJ/${L}__${base}.o"
+    "$LLVM/llc" -mtriple=wasm64-unknown-wasi --enable-emscripten-cxx-exceptions -filetype=obj -O2 "$bc" -o "$OBJ/${L}__${base}.o"
   done
 done
-"$LLVM/llc" -mtriple=wasm64-unknown-wasi -filetype=obj -O2 "$GEN/wasm64-wasi-runtime.bc" -o "$OBJ/generated-runtime.o"
+"$LLVM/llc" -mtriple=wasm64-unknown-wasi --enable-emscripten-cxx-exceptions -filetype=obj -O2 "$GEN/wasm64-wasi-runtime.bc" -o "$OBJ/generated-runtime.o"
 
 echo "## Linking hello.wasm..."
 # 64KB default shadow stack is far too small for the Dylan runtime; give it 32MB.
 "$WLD" -mwasm64 --no-entry --export-dynamic --initial-memory=536870912 --max-memory=1073741824 \
+  --export=__THREW__ --export=__threwValue --export=tempRet0 --export-table \
   -z stack-size=33554432 \
   "$OBJ"/*.o -o "$BUILD/hello.wasm" 2>/tmp/hello-wld && {
   echo "   *** LINKED: $BUILD/hello.wasm ($(ls -la "$BUILD/hello.wasm"|awk '{print $5}') bytes) ***"

@@ -31,10 +31,58 @@ const esc = s => s.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c
 Error.stackTraceLimit = 100000;
 
 let memory; const dec = new TextDecoder(); let dylanOut = '';
-const imports = { env: { host_write(fd, ptr, len) {
-  dylanOut += dec.decode(new Uint8Array(memory.buffer, Number(ptr), Number(len)));
-  return BigInt(Number(len));
-} } };
+// Emscripten-style EH bridge (--enable-emscripten-cxx-exceptions on the Dylan
+// bitcode). When Dylan code raises a condition, primitive_nlx in llvm-nlx.c
+// calls _Unwind_RaiseException, which we routed through host_throw -> a JS
+// throw. The throw propagates through wasm frames until one of the lowered
+// `invoke_*` wrappers below catches it, sets __THREW__, and returns. The
+// caller's landingpad code then calls __cxa_find_matching_catch_* (which
+// just returns the thrown value here — Open Dylan dispatches catch clauses
+// itself further up).
+let instance;
+let threwAddr = 0;            // address of C's __THREW__ in linear memory
+let jsThrewValue = 0n;        // BigInt: the wasm64-sized exception pointer
+class DylanThrow extends Error { constructor(exc) { super('dylan'); this.exc = exc; } }
+function makeInvoke(name) {
+  const isVoid = (name[7] === 'v');           // invoke_v… returns void
+  return function (...all) {
+    // wasm64: the function-table index arrives as a BigInt (i64) and must
+    // stay BigInt — Table.get() rejects a Number on memory64 tables.
+    const idx = all[0];
+    const args = all.slice(1);
+    try {
+      return instance.exports.__indirect_function_table.get(idx)(...args);
+    } catch (e) {
+      if (e instanceof DylanThrow) {
+        new Int32Array(memory.buffer)[threwAddr >>> 2] = 1;
+        jsThrewValue = e.exc;
+        return isVoid ? undefined : 0n;
+      }
+      throw e;
+    }
+  };
+}
+let tempRet0Addr = 0;       // address of C's tempRet0 in linear memory
+function setTempRet0(v) { new Int32Array(memory.buffer)[tempRet0Addr >>> 2] = v | 0; }
+const env = {
+  host_write(fd, ptr, len) {
+    dylanOut += dec.decode(new Uint8Array(memory.buffer, Number(ptr), Number(len)));
+    return BigInt(Number(len));
+  },
+  host_throw(exc) { throw new DylanThrow(exc); },
+  // For Open Dylan's NLX (block/return-from): the catch typeinfo is a unique
+  // marker per block, and the thrown exception is for that exact block. We
+  // approximate "match" by always returning the thrown value and setting
+  // tempRet0 to the typeinfo's address (matches what llvm_eh_typeid_for
+  // returns). Good enough for happy-path NLX; an unmatched real error will
+  // also "match" here and may behave oddly — to be refined.
+  __cxa_find_matching_catch_2()  { setTempRet0(0);             return jsThrewValue; },
+  __cxa_find_matching_catch_3(t) { setTempRet0(Number(t) | 0); return jsThrewValue; },
+};
+['invoke_vj','invoke_vjjj','invoke_vjjjj','invoke_vjjjjj','invoke_vjjjjjj',
+ 'invoke_vjjjjjjj','invoke_vjjjjjjjj','invoke_vjjjjjjjjj','invoke_vjjjjjjjjjj',
+ 'invoke_jijj','invoke_jiji'].forEach(n => env[n] = makeInvoke(n));
+const imports = { env };
 
 const rows = items => items.map(([cls,k,v]) =>
   `<div class="row ${cls}"><span class="k">${k}</span><span class="v">${v}</span></div>`).join('');
@@ -43,8 +91,11 @@ const rows = items => items.map(([cls,k,v]) =>
   const t0 = performance.now();
   const buf = await (await fetch('hello.wasm')).arrayBuffer();
   const sizeMB = (buf.byteLength/1048576).toFixed(1);
-  const { instance } = await WebAssembly.instantiate(buf, imports);
+  const { instance: inst } = await WebAssembly.instantiate(buf, imports);
+  instance = inst;
   const e = instance.exports; memory = e.memory;
+  threwAddr = Number(e.__THREW__?.value || 0n);
+  tempRet0Addr = Number(e.tempRet0?.value || 0n);
   const loadMs = Math.round(performance.now() - t0);
 
   let outcome, trace = '', cls = 'stop-card';
