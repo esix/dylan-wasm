@@ -221,7 +221,7 @@ index 0000000..243e4ef
 +
 +include $(SYSTEM_BUILD_SCRIPTS)/posix-build.jam ;
 diff --git a/sources/lib/run-time/boehm-collector.c b/sources/lib/run-time/boehm-collector.c
-index e178250..43ca44a 100644
+index e178250..1105796 100644
 --- a/sources/lib/run-time/boehm-collector.c
 +++ b/sources/lib/run-time/boehm-collector.c
 @@ -325,7 +325,7 @@ void *primitive_alloc_s2(size_t size,
@@ -419,6 +419,17 @@ index e178250..43ca44a 100644
                                    void *fill,
                                    size_t rep_size,
                                    size_t rep_size_slot)
+@@ -1052,7 +1056,9 @@ void primitive_mps_ld_add(void *d_hs, void *addr)
+   unused(addr);
+ }
+ 
+-int primitive_mps_ld_isstale(void *d_hs)
++/* Descriptor: => <raw-integer>, lowered as i64. C `int` is i32 on wasm,
++   so wasm call_indirect rejects the signature; widen to DSINT (= long). */
++DSINT primitive_mps_ld_isstale(void *d_hs)
+ {
+   unused(d_hs);
+ 
 diff --git a/sources/registry/wasm32-wasi/common-dylan b/sources/registry/wasm32-wasi/common-dylan
 new file mode 100644
 index 0000000..045c0be

@@ -49,7 +49,9 @@ const rows = items => items.map(([cls,k,v]) =>
 
   let outcome, trace = '', cls = 'stop-card';
   try {
-    const rc = e.main(0, 0n);
+    // argv must be non-NULL so _Init_hello_'s `TargvT != null` guard
+    // lets the top-level expression (and library init bodies) actually run.
+    const rc = e.main(0, 1n);
     outcome = ['ok','main returned', String(rc)]; cls = 'ok-card';
   } catch (err) {
     const frames = (err.stack||'').split('\n')

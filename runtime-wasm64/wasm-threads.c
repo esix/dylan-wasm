@@ -54,8 +54,40 @@ void primitive_initialize_current_thread(dylan_value t, DBOOL s)
 void primitive_initialize_special_thread(dylan_value t)
 { one_true_thread = t; }
 
-/* --- thread variables --- */
-dylan_value primitive_allocate_thread_variable(dylan_value i) { ignore(i); return DFALSE; }
+/* --- thread variables ---
+ * Upstream `dummy-threads.c` returns DFALSE here because in non-threaded
+ * builds it's paired with stubbed read/write_thread_variable. But Open
+ * Dylan's LLVM back-end emits INLINE TLV access through `Pteb` + the global
+ * `Ptlv_initializations` table: it expects this primitive to return a real
+ * raw integer offset that's used as a vector index, and the new variable's
+ * initial value to live at that offset in `Ptlv_initializations`. The
+ * DFALSE-stub bug masquerades as a NULL hash-state during puthash → boot
+ * symbol install: NULL ptrtoint'd is a huge offset, off-end-of-vector read
+ * returns 0 from wasm linear memory, type-check expects <hash-state>. */
+typedef struct dylan_sov { void *wrapper; void *size; void *elems[]; } dylan_sov;
+extern dylan_sov *Ptlv_initializations;
+extern unsigned long Ptlv_initializations_cursor;
+extern char KLsimple_object_vectorGVKdW;     /* wrapper singleton */
+extern char KPunboundVKi;                    /* <unbound> singleton */
+
+dylan_value primitive_allocate_thread_variable(dylan_value v) {
+  unsigned long off = Ptlv_initializations_cursor;
+  unsigned long cur_size = ((unsigned long)Ptlv_initializations->size) >> 2;
+  if (off >= cur_size) {
+    unsigned long new_size = cur_size ? cur_size * 2 : 64;
+    dylan_sov *nv = malloc(sizeof(dylan_sov) + new_size * sizeof(void *));
+    nv->wrapper = &KLsimple_object_vectorGVKdW;
+    nv->size = (void *)((new_size << 2) | 1);           /* tagged integer */
+    for (unsigned long i = 0; i < off; i++)
+      nv->elems[i] = Ptlv_initializations->elems[i];
+    for (unsigned long i = off; i < new_size; i++)
+      nv->elems[i] = &KPunboundVKi;
+    Ptlv_initializations = nv;
+  }
+  Ptlv_initializations->elems[off] = (void *)v;
+  Ptlv_initializations_cursor = off + 1;
+  return (dylan_value)off;
+}
 
 /* --- simple locks --- */
 dylan_value primitive_make_simple_lock(dylan_value l, dylan_value n) { ignore(l); ignore(n); return THREAD_SUCCESS; }

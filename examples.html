@@ -33,11 +33,59 @@
   <h1>Dylan, compiled and running</h1>
   <p class="sub">Three console programs built with Open Dylan and executed by the compiled runtime + GC.</p>
 
-  <div class="banner">
-    <b>Status:</b> these ran <b>natively</b> (real output below). The WebAssembly build
-    boots the runtime in-browser but can't run a full program yet — every program shares
-    one remaining blocker in base-runtime init (<code>_Init_dylan_</code>, boot-symbol setup).
-    Fix that one thing and these run in the browser too.
+  <div class="banner" style="border-color:#3fb950;color:#56d364">
+    <b>Status:</b> Dylan now <b>runs in your browser</b> via wasm64 —
+    <a href="run-hello.html">live demo (factorial / fib / Towers of Hanoi)</a>.
+    The bigger programs below ran <b>natively</b>; bringing them to the browser
+    needs a few more runtime pieces (real non-local-exit / unwind, big-integer
+    overflow handling, <code>application-arguments</code>, <code>random</code>,
+    <code>timing</code>). The hard part — booting the runtime, GC, dispatch,
+    streams, format-out — is done.
+  </div>
+
+  <!-- live in-browser demo -->
+  <div class="ex" style="border-color:#3fb950">
+    <h2 style="color:#3fb950">live in your browser ✓</h2>
+    <p class="desc">factorial, fibonacci, and Towers of Hanoi compiled to wasm64 and executed by the Dylan runtime in your browser. Real GC, real method dispatch, real <code>format-out</code> through to <code>host_write</code>.</p>
+    <div class="label">Dylan source (in <code>hello/hello.dylan</code>)</div>
+<pre class="src"><span class="kw">define function</span> <span class="fn">fact</span> (n :: <span class="ty">&lt;integer&gt;</span>) =&gt; (r :: <span class="ty">&lt;integer&gt;</span>)
+  <span class="kw">if</span> (n &lt;= 1) 1 <span class="kw">else</span> n * fact(n - 1) <span class="kw">end</span>
+<span class="kw">end</span>;
+
+<span class="kw">define function</span> <span class="fn">hanoi</span>
+    (n :: <span class="ty">&lt;integer&gt;</span>, from :: <span class="ty">&lt;string&gt;</span>, to :: <span class="ty">&lt;string&gt;</span>, via :: <span class="ty">&lt;string&gt;</span>) =&gt; ()
+  <span class="kw">if</span> (n = 1)
+    format-out(<span class="ty">"  disk 1: %s -&gt; %s\n"</span>, from, to);
+  <span class="kw">else</span>
+    hanoi(n - 1, from, via, to);
+    format-out(<span class="ty">"  disk %d: %s -&gt; %s\n"</span>, n, from, to);
+    hanoi(n - 1, via, to, from);
+  <span class="kw">end</span> <span class="kw">if</span>;
+<span class="kw">end function</span>;</pre>
+    <div class="label">Output (live, captured from this browser tab)</div>
+<pre class="out" id="live-out">loading wasm64 module…</pre>
+<script type="module">
+const dec = new TextDecoder();
+let dylanOut = ''; let memory;
+const imports = { env: { host_write(fd, ptr, len) {
+  dylanOut += dec.decode(new Uint8Array(memory.buffer, Number(ptr), Number(len)));
+  return BigInt(Number(len));
+} } };
+(async () => {
+  const el = document.getElementById('live-out');
+  try {
+    const r = await fetch('opendylan/_build-wasm64/hello.wasm', {cache: 'no-store'});
+    if (!r.ok) throw new Error('no hello.wasm — run setup.sh first');
+    const buf = await r.arrayBuffer();
+    const { instance } = await WebAssembly.instantiate(buf, imports);
+    memory = instance.exports.memory;
+    instance.exports.main(0, 1n);
+    el.textContent = dylanOut || '(no output)';
+  } catch (e) {
+    el.textContent = '⚠ ' + e.message + '\n(this page expects to be served from the repo root so it can fetch opendylan/_build-wasm64/hello.wasm)';
+  }
+})();
+</script>
   </div>
 
   <!-- quicksort -->

@@ -3,12 +3,14 @@
 Compiling [Dylan](https://opendylan.org/) to WebAssembly via Open Dylan's LLVM
 back-end.
 
-**Status:** the Dylan runtime **compiles to wasm64 and boots in a browser** — a
-`hello` module (~5.4 MB) instantiates and executes its own runtime (GC, library
-init, generic dispatch) up to one remaining blocker in base-runtime init
-(`_Init_dylan_`, boot-symbol setup). Open it with `run-hello.html` for a live
-status dashboard. Native builds of real programs (quicksort, factorial,
-towers-of-hanoi) run fully — see `examples.html`.
+**Status:** Dylan programs **run in your browser** via wasm64. The included
+`hello` showcase (factorial, Fibonacci, Towers of Hanoi) compiles to a ~5.4 MB
+`.wasm`, instantiates in Chrome / Firefox, and prints its output through
+`host_write` — full Dylan runtime (GC, generic dispatch, streams,
+`format-out`) live in the browser. Open `run-hello.html` for the dashboard,
+or `examples.html` for the captured output alongside the source. Things still
+missing for fancier programs: real non-local-exit / unwind, big-integer
+overflow, `application-arguments`, `random`, `timing`.
 
 We target **wasm64 / memory64** (64-bit pointers): wasm32's 32-bit pointers tripped
 invalid size-dependent bitcasts in Open Dylan's runtime codegen, and wasm64 reuses
