@@ -7,6 +7,8 @@ REPO="$(cd "$SHIM/.." && pwd)"
 OD="$REPO/opendylan"; REL="$REPO/bootstrap/opendylan-2026.2pre1"
 export PATH="$OD/Bootstrap.1/bin:$REL/bin:$PATH"
 export PKG_CONFIG_PATH="/opt/homebrew/lib/pkgconfig:$PKG_CONFIG_PATH"
+# Ensure the output dirs exist on a fresh clone (these are gitignored).
+mkdir -p "$OD/_build" "$OD/_build-wasm64/runtime"
 
 echo "## [1/4] Rebuilding compiler..."
 ( cd "$OD" && make bootstrap-stage-1 DYLAN_JOBS=8 ) > "$OD/_build/rebuild-tls.log" 2>&1 || { tail -20 "$OD/_build/rebuild-tls.log"; exit 1; }
