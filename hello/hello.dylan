@@ -46,19 +46,42 @@ define method integer-vector-quicksort
   local method exchange (m :: <integer>, n :: <integer>) => ()
 	  let t = v[m]; v[m] := v[n]; v[n] := t
 	end method exchange,
+        // partition is intentionally a `while` loop instead of the upstream
+        // tail-recursive `partition(i + 1, j - 1, x)`. Open Dylan's
+        // self-call-to-loop pass in entry-points.dylan only fires when the
+        // call target is a `<&lambda>` AND the enclosing lambda IS that
+        // lambda; the typed local method here gets promoted to a generic
+        // function call and ends up in the `<&generic-function>` overload
+        // of `maybe-upgrade-required-call`, which never loop-converts. On
+        // wasm without a tail-call codegen path that overflows the engine's
+        // call stack at ~2500 frames. With a manual while-loop the call
+        // disappears, the typed inner loops + element-setter stay, and the
+        // partition body becomes a single basic-block loop in the IR.
         method partition
-	    (lo :: <integer>, hi :: <integer>, x :: <integer>)
+	    (lo0 :: <integer>, hi0 :: <integer>, x :: <integer>)
 	 => (i :: <integer>, j :: <integer>)
-	  let i :: <integer>
-	    = for (i :: <integer> from lo to hi, while: v[i] < x) finally i end;
-	  let j :: <integer>
-	    = for (j :: <integer> from hi to lo by -1, while: x < v[j]) finally j end;
-	  if (i <= j)
-	    exchange(i, j);
-	    partition(i + 1, j - 1, x)
-	  else
-	    values(i, j)
-	  end
+	  let lo :: <integer> = lo0;
+	  let hi :: <integer> = hi0;
+	  let result-i :: <integer> = 0;
+	  let result-j :: <integer> = 0;
+	  block (return)
+	    while (#t)
+	      let i :: <integer>
+	        = for (i :: <integer> from lo to hi, while: v[i] < x) finally i end;
+	      let j :: <integer>
+	        = for (j :: <integer> from hi to lo by -1, while: x < v[j]) finally j end;
+	      if (i <= j)
+	        exchange(i, j);
+	        lo := i + 1;
+	        hi := j - 1;
+	      else
+	        result-i := i;
+	        result-j := j;
+	        return(#f);
+	      end if;
+	    end while;
+	  end block;
+	  values(result-i, result-j)
 	end method partition,
         method sort (lo :: <integer>, hi :: <integer>) => ()
 	  when (lo < hi)
@@ -101,19 +124,11 @@ define method quicksort-demo () => ()
   // Stay within tagged-int range — with generic-arithmetic loaded
   // $maximum-integer is a <double-integer> that `random` doesn't handle.
   for (i :: <integer> from 0 below n) orig[i] := random(1000000000); end;
-  // Only sequence-quicksort. Open Dylan loop-converts that one's
-  // partition (its tail-recursive `partition(i + 1, j - 1, x)` becomes
-  // a `br label %0` back to entry — verified in the emitted IR). The
-  // typed `integer-vector-quicksort`'s partition does NOT get that
-  // loop conversion — its recursive call goes via the method object
-  // (`call %iep(@KpartitionF79, ...)`) and is followed by multi-value
-  // extractvalue, so it isn't in LLVM's "tail position" and isn't
-  // rewritten. On wasm without a `musttail` + `+tail-call` codegen
-  // path, ~2500 frames overflow the JS engine's call stack. Fix would
-  // be in the Open Dylan back-end (extend loop-conversion to typed
-  // methods, or emit musttail on the recursive call).
-  for (function in vector(sequence-quicksort),
-       typename in #["<sequence>"])
+  // Both quicksorts run now that integer-vector-quicksort's partition
+  // is an explicit while-loop rather than tail-recursion (see comment
+  // there for the back-end TCO gap this works around).
+  for (function in vector(sequence-quicksort, integer-vector-quicksort),
+       typename in #["<sequence>", "<integer-vector>"])
     map-into(data, identity, orig);
     format-out("Sorting %d <integer>s as %s...", n, typename);
     let (seconds, microseconds) = timing () function(data); end;
