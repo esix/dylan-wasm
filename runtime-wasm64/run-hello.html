@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <title>Dylan → WebAssembly</title>
+<link rel="icon" href="data:,">
 <style>
   body { background:#0d1117; color:#c9d1d9; font:14px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;
          margin:0; padding:2rem; }
@@ -163,7 +164,8 @@ const rows = items => items.map(([cls,k,v]) =>
     ['ok','Instantiated', `wasm64 (memory64), ${memory.buffer.byteLength/1048576} MB memory`],
     ['ok','Exports', `${Object.keys(e).length.toLocaleString()} functions`],
     ['ok','Runtime entered', `main → __wasm_call_ctors → _Init_dylan_`],
-    ['work','Library init', `running…`],
+    cls === 'ok-card' ? ['ok','Library init', `complete`]
+                      : ['work','Library init', `halted mid-init`],
     outcome,
   ];
 

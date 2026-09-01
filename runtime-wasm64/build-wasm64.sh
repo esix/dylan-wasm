@@ -45,9 +45,13 @@ done
 echo "## Linking with wasm-ld (-mwasm64)..."
 LDFLAGS=(-mwasm64 --no-entry --export-dynamic --initial-memory=268435456)
 [ "$1" = "probe" ] && LDFLAGS+=(--allow-undefined)
-"$WLD" "${LDFLAGS[@]}" "$OBJ"/*.o -o "$BUILD/dylan-runtime.wasm" 2>/tmp/wld64-err && {
-  echo "   *** LINKED: $BUILD/dylan-runtime.wasm ($(ls -la "$BUILD/dylan-runtime.wasm"|awk '{print $5}') bytes) ***"
-} || { echo "   diagnostics:"; grep -iE "undefined|error" /tmp/wld64-err | sort -u | head -60; }
+"$WLD" "${LDFLAGS[@]}" "$OBJ"/*.o -o "$BUILD/dylan-runtime.wasm" 2>"$OBJ/wld-err.log" || {
+  echo "   LINK FAILED — diagnostics:"
+  grep -iE "undefined|error" "$OBJ/wld-err.log" | sort -u | head -60
+  exit 1
+}
+echo "   *** LINKED: $BUILD/dylan-runtime.wasm ($(stat -f%z "$BUILD/dylan-runtime.wasm") bytes) ***"
 
-[ "$1" = "probe" ] && [ -f "$BUILD/dylan-runtime.wasm" ] && \
+if [ "${1:-}" = "probe" ]; then
   "$LLVM/llvm-nm" --undefined-only "$BUILD/dylan-runtime.wasm" 2>/dev/null | awk '{print $NF}' | sort -u
+fi

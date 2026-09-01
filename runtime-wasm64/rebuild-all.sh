@@ -20,13 +20,18 @@ export OPEN_DYLAN_USER_ROOT="$OD/_build-wasm64"
 
 echo "## [2/4] Recompiling dylan, common-dylan, io, hello -> wasm64..."
 for L in dylan common-dylan io hello; do
-  dylan-compiler -compile "$L" > "$OD/_build-wasm64/recompile-$L.log" 2>&1
+  if ! dylan-compiler -compile "$L" > "$OD/_build-wasm64/recompile-$L.log" 2>&1; then
+    echo "    $L: COMPILE FAILED"; tail -20 "$OD/_build-wasm64/recompile-$L.log"; exit 1
+  fi
   echo "    $L: $(tail -1 "$OD/_build-wasm64/recompile-$L.log")"
 done
 
 echo "## [3/4] Regenerating wasm64 runtime bitcode..."
-( cd "$OD/_build-wasm64/runtime" &&
-  "$OD/Bootstrap.1/bin/llvm-runtime-generator" "$OD/sources/dylan/dylan.lid" wasm64-wasi ) >/dev/null 2>&1
+if ! ( cd "$OD/_build-wasm64/runtime" &&
+       "$OD/Bootstrap.1/bin/llvm-runtime-generator" "$OD/sources/dylan/dylan.lid" wasm64-wasi ) \
+     > "$OD/_build-wasm64/runtime-generator.log" 2>&1; then
+  echo "    RUNTIME GENERATION FAILED"; tail -20 "$OD/_build-wasm64/runtime-generator.log"; exit 1
+fi
 echo "    regenerated"
 
 echo "## [4/4] Linking hello.wasm..."

@@ -6,8 +6,8 @@ back-end.
 **Status:** Dylan programs **run in your browser** via wasm64. The included
 `hello` showcase — **all three upstream Open Dylan examples
 (`quicksort`, `towers-of-hanoi`, `factorial-big`) verbatim** — compiles to
-a ~5.7 MB `.wasm`, instantiates in Chrome / Firefox, and prints its output
-through `host_write`. Full Dylan runtime (GC, generic dispatch, streams,
+a ~5.7 MB `.wasm`, instantiates in Chrome / Firefox / node ≥ 24, and prints
+its output through `host_write`. Full Dylan runtime (GC, generic dispatch, streams,
 `format-out`, **non-local-exit / conditions** via an Emscripten-style EH
 bridge, **`random`** seeded from a host clock, **`timing`** macro backed by
 `performance.now`, real **128-bit `<double-integer>` arithmetic** with
@@ -34,7 +34,7 @@ Two repos, by design:
 | Path | What |
 |---|---|
 | `opendylan/` *(submodule, upstream pinned)* | Vanilla Open Dylan @ `3b2b904`. `setup.sh` patches it at build time. Submodule is configured `ignore = dirty` so the patched working tree doesn't appear as "modified content" in `git status`. |
-| `patches/opendylan-wasm.patch` | Our compiler changes: WebAssembly (wasm32/wasm64) LLVM back-end targets, default-sections fix, runtime ABI fixes, Apple-Silicon codesign fix, wasm build scripts + registries. |
+| `patches/opendylan-wasm.patch` | Our compiler changes: WebAssembly (wasm32/wasm64) LLVM back-end targets, default-sections fix, runtime ABI fixes, Apple-Silicon codesign fix, wasm build scripts + registries. Regenerate after editing the submodule with `patches/regen-patch.sh`. |
 | `runtime-wasm64/` | Freestanding wasm64 runtime shim + build scripts: `libc-shim.c`, `wasm-threads.c`, `fakegc/gc/gc.h`, `build-wasm64.sh` (link a runtime `.wasm`), `build-hello.sh` (link an executable), `rebuild-all.sh` (full rebuild), `run-hello.html`/`run-hello.mjs` (browser/node harness). |
 | `hello/` | Minimal Dylan test program (sources only). |
 | `examples.html` | Showcase of native example programs and their output. |
@@ -61,6 +61,13 @@ Then:
 open http://localhost:8731/run-hello.html
 ```
 
+Or without a browser (**node ≥ 24**; older V8s implement an earlier memory64
+draft and reject the module's table64 encoding):
+
+```sh
+node runtime-wasm64/run-hello.mjs
+```
+
 Dev loop after editing the compiler (`opendylan/sources/...`): `runtime-wasm64/rebuild-all.sh`.
 
 ## Modifying the compiler
@@ -72,12 +79,14 @@ e.g. `opendylan/sources/dfmc/llvm-back-end/llvm-targets.dylan`, run
 Roll your edits back into the patch:
 
 ```sh
-( cd opendylan && git diff -- \
-    sources/dfmc/llvm-back-end \
-    sources/jamfiles \
-    sources/registry/wasm32-wasi sources/registry/wasm64-wasi \
-    sources/lib/run-time/boehm-collector.c ) > patches/opendylan-wasm.patch
+patches/regen-patch.sh        # regenerates patches/opendylan-wasm.patch
 git add patches/opendylan-wasm.patch && git commit
 ```
+
+(Don't hand-roll a `git diff` for this: the patch also carries files that are
+*untracked* in the submodule — the wasm jamfiles and registries — which a plain
+`git diff <paths>` silently drops. The script stages them with `git add -N`
+first, and covers every path the patch touches, including
+`sources/dfmc/modeling/objects.dylan`.)
 
 If you ever want to bump the upstream pin: `cd opendylan && git fetch && git checkout <new-sha>`, re-base the patch onto the new tree (resolve conflicts in `git apply` output), then commit the new submodule SHA here (`git add opendylan`).
