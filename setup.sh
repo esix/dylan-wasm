@@ -65,8 +65,9 @@ echo "## [4/4] Building wasm64 runtime + hello.wasm..."
 
 cat <<EOF
 
-Done. To run it:
-  ( cd opendylan/_build-wasm64 && python3 -m http.server 8731 ) &
-  open http://localhost:8731/run-hello.html      # live wasm dashboard
-  open examples.html                              # native examples showcase
+Done. To run it (serve from the repo root — examples.html fetches the wasm
+relative to it, and browsers won't fetch wasm over file://):
+  python3 -m http.server 8731 &
+  open http://localhost:8731/examples.html       # showcase incl. live wasm card
+  open http://localhost:8731/opendylan/_build-wasm64/run-hello.html  # dashboard
 EOF

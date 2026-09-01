@@ -57,9 +57,14 @@ cd dylan-wasm
 Then:
 
 ```sh
-( cd opendylan/_build-wasm64 && python3 -m http.server 8731 ) &
-open http://localhost:8731/run-hello.html
+python3 -m http.server 8731 &                    # serve from the repo root
+open http://localhost:8731/examples.html         # showcase incl. the live wasm card
+open http://localhost:8731/opendylan/_build-wasm64/run-hello.html   # boot dashboard
 ```
+
+(Serve from the repo root: `examples.html`'s live card fetches
+`opendylan/_build-wasm64/hello.wasm` relative to it, and browsers won't fetch
+wasm over `file://`.)
 
 Or without a browser (**node ≥ 24**; older V8s implement an earlier memory64
 draft and reject the module's table64 encoding):

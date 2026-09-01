@@ -6,15 +6,23 @@
  * (note primitive_detach_thread now returns void). Derived from the upstream
  * dummy-threads.c, updated to current declarations.
  */
-/* run-time.h's prototypes for these two declare a `dylan_value` return, but the
-   LLVM primitive descriptors declare `=> ()` (void). C ignores return type for
-   linkage so native tolerates the mismatch; wasm call_indirect does not, so we
-   must compile them as void. Rename the stale prototypes out of the way. */
+/* run-time.h's prototypes disagree with the LLVM primitive descriptors: the
+   initialize-*-thread pair is declared returning `dylan_value` where the
+   descriptors say `=> ()` (void), and the `synchronous?` params are DBOOL
+   (unsigned long, i64) where the back-end lowers <raw-boolean> to i32. C
+   ignores both for linkage so native tolerates the mismatch; wasm does not —
+   wasm-ld routes mismatched calls to an `unreachable` stub. Rename the stale
+   prototypes out of the way and define with the descriptor-exact types. */
 #define primitive_initialize_special_thread od_stale_iss_proto
 #define primitive_initialize_current_thread od_stale_ics_proto
+#define primitive_make_thread od_stale_mkt_proto
 #include "run-time.h"
 #undef primitive_initialize_special_thread
 #undef primitive_initialize_current_thread
+#undef primitive_make_thread
+
+/* <raw-boolean>: i32 in the emitted bitcode, so `int` here — NOT DBOOL. */
+typedef int DRAWBOOL;
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -35,7 +43,7 @@ void threads_get_stuffed(void)
 }
 
 /* --- thread lifecycle --- */
-dylan_value primitive_make_thread(dylan_value t, dylan_value f, DBOOL s)
+dylan_value primitive_make_thread(dylan_value t, dylan_value f, DRAWBOOL s)
 { ignore(t); ignore(f); ignore(s); threads_get_stuffed(); return THREAD_SUCCESS; }
 dylan_value primitive_destroy_thread(dylan_value t) { ignore(t); return THREAD_SUCCESS; }
 void primitive_detach_thread(dylan_value t) { ignore(t); }
@@ -49,7 +57,7 @@ void primitive_sleep(dylan_value ms) { ignore(ms); }
    init (one_true_thread), not an integer, or callers fail their type check. */
 dylan_value primitive_current_thread(void) { return one_true_thread; }
 /* descriptors declare these `=> ()` (void) — must match for wasm call_indirect */
-void primitive_initialize_current_thread(dylan_value t, DBOOL s)
+void primitive_initialize_current_thread(dylan_value t, DRAWBOOL s)
 { ignore(s); one_true_thread = t; }
 void primitive_initialize_special_thread(dylan_value t)
 { one_true_thread = t; }

@@ -459,6 +459,24 @@ index e178250..1105796 100644
  {
    unused(d_hs);
  
+diff --git a/sources/lib/run-time/collector.c b/sources/lib/run-time/collector.c
+index 2c5700c..7ea8a34 100644
+--- a/sources/lib/run-time/collector.c
++++ b/sources/lib/run-time/collector.c
+@@ -221,8 +221,12 @@ void primitive_begin_heap_alloc_stats()
+ #endif
+ }
+ 
++/* Returns a machine word: the LLVM primitive descriptor declares
++ * (<raw-byte-string>) => (<raw-integer>), and the generated runtime headers
++ * prototype this as DSINT (long). An `int` return is benign on x86-64/ARM64
++ * calling conventions but is a fatal signature mismatch on wasm. */
+ RUN_TIME_API
+-int primitive_end_heap_alloc_stats(char *buffer)
++long primitive_end_heap_alloc_stats(char *buffer)
+ {
+ #ifndef NO_ALLOCATION_COUNT_FOR_PROFILER
+   dylan_streamQ = TRUE;
 diff --git a/sources/registry/wasm32-wasi/common-dylan b/sources/registry/wasm32-wasi/common-dylan
 new file mode 100644
 index 0000000..045c0be
