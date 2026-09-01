@@ -99,9 +99,6 @@ const env = {
     return jsThrewValue;
   },
 };
-['invoke_vj','invoke_vjjj','invoke_vjjjj','invoke_vjjjjj','invoke_vjjjjjj',
- 'invoke_vjjjjjjj','invoke_vjjjjjjjj','invoke_vjjjjjjjjj','invoke_vjjjjjjjjjj',
- 'invoke_jijj','invoke_jiji'].forEach(n => env[n] = makeInvoke(n));
 const imports = { env };
 
 const rows = items => items.map(([cls,k,v]) =>
@@ -111,8 +108,15 @@ const rows = items => items.map(([cls,k,v]) =>
   const t0 = performance.now();
   const buf = await (await fetch('hello.wasm')).arrayBuffer();
   const sizeMB = (buf.byteLength/1048576).toFixed(1);
-  const { instance: inst } = await WebAssembly.instantiate(buf, imports);
-  instance = inst;
+  const module = await WebAssembly.compile(buf);
+  // Synthesize the invoke_<sig> EH trampolines from the module's own import
+  // list — llc emits one per invoke arity, so a hardcoded list breaks with a
+  // LinkError whenever new Dylan code introduces a new arity.
+  for (const imp of WebAssembly.Module.imports(module)) {
+    if (imp.module === 'env' && imp.name.startsWith('invoke_') && !(imp.name in env))
+      env[imp.name] = makeInvoke(imp.name);
+  }
+  instance = await WebAssembly.instantiate(module, imports);
   const e = instance.exports; memory = e.memory;
   threwAddr = Number(e.__THREW__?.value || 0n);
   tempRet0Addr = Number(e.tempRet0?.value || 0n);

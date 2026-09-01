@@ -64,13 +64,9 @@ const env = {
     return jsThrewValue;
   },
 };
-['invoke_vj','invoke_vjjj','invoke_vjjjj','invoke_vjjjjj','invoke_vjjjjjj',
- 'invoke_vjjjjjjj','invoke_vjjjjjjjj','invoke_vjjjjjjjjj','invoke_vjjjjjjjjjj',
- 'invoke_jijj','invoke_jiji'].forEach(n => env[n] = makeInvoke(n));
-
-let inst;
+let module;
 try {
-  ({ instance: inst } = await WebAssembly.instantiate(readFileSync(wasmPath), { env }));
+  module = await WebAssembly.compile(readFileSync(wasmPath));
 } catch (err) {
   if (err instanceof WebAssembly.CompileError) {
     console.error(`[harness] ${err.message}`);
@@ -79,7 +75,14 @@ try {
   }
   throw err;
 }
-instance = inst;
+// Synthesize the invoke_<sig> EH trampolines from the module's own import
+// list — llc emits one per invoke arity, so a hardcoded list breaks with a
+// LinkError whenever new Dylan code introduces a new arity.
+for (const imp of WebAssembly.Module.imports(module)) {
+  if (imp.module === 'env' && imp.name.startsWith('invoke_') && !(imp.name in env))
+    env[imp.name] = makeInvoke(imp.name);
+}
+instance = await WebAssembly.instantiate(module, { env });
 const e = instance.exports;
 memory = e.memory;
 threwAddr = Number(e.__THREW__?.value || 0n);
