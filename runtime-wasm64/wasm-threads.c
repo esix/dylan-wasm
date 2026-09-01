@@ -1,6 +1,6 @@
-/* Single-threaded thread-primitive stubs for the Dylan→wasm32 MVP.
+/* Single-threaded thread-primitive stubs for the Dylan→wasm MVP.
  *
- * wasm32-wasi (without the threads proposal) is single-threaded, so locks,
+ * wasm-wasi (without the threads proposal) is single-threaded, so locks,
  * semaphores, and notifications are no-ops that always "succeed", and thread
  * creation/joining is unsupported. Signatures track the current run-time.h
  * (note primitive_detach_thread now returns void). Derived from the upstream

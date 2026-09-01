@@ -5,7 +5,7 @@
 # bitcode to wasm64 objects, and links with wasm-ld into dylan-runtime.wasm.
 # Prereqs: ./iterate-style build already produced the wasm64 bitcode under
 # opendylan/_build-wasm64/ (compile the `dylan` library for wasm64-wasi and run
-# llvm-runtime-generator dylan.lid wasm64-wasi). See DESIGN.md / README.md.
+# llvm-runtime-generator dylan.lid wasm64-wasi). See README.md.
 #
 # Pass "probe" to link with --allow-undefined and list missing symbols.
 set -e

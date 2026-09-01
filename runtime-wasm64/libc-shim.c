@@ -270,7 +270,20 @@ long  time(long *t)            { uint64_t s = host_now_ns() / 1000000000ULL; if 
 
 /* ---------- Dylan io syscall wrappers (stubs; stdout is non-seekable) ---------- */
 int   io_errno(void)                 { return 0; }
-char *io_strerror(int e)             { (void)e; return ""; }
+/* Signature per io/unix-interface.dylan's %call-c-function declaration:
+ * (<raw-c-signed-int>, <raw-byte-string>, <raw-c-unsigned-int>) => string.
+ * It is reached via call_indirect (EH-lowered path), where wasm checks the
+ * signature at runtime — a 1-arg version traps the first time Dylan formats
+ * a Unix error message. */
+char *io_strerror(int e, char *buffer, unsigned size) {
+  static const char msg[] = "unknown error (wasm shim)";
+  unsigned n = 0;
+  (void)e;
+  if (size == 0) return buffer;
+  while (msg[n] && n < size - 1) { buffer[n] = msg[n]; n++; }
+  buffer[n] = '\0';
+  return buffer;
+}
 long  io_lseek(int fd, long off, int whence) { (void)fd;(void)off;(void)whence; return -1; }
 int   io_fd_positionable(int fd)     { (void)fd; return 0; }   /* false: stdout not positionable */
 void  timer_get_point_in_time(uint32_t t[2]) {

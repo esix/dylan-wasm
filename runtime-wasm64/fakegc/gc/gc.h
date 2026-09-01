@@ -1,8 +1,8 @@
-/* Minimal leak-GC shim for the Dylan→wasm32 MVP.
+/* Minimal leak-GC shim for the Dylan→wasm MVP.
  *
  * Maps the Boehm GC API surface used by boehm-collector.c onto wasi-libc's
  * calloc, with NO collection (everything leaks). Correct for short-lived
- * programs; real GC on wasm is future work (see DESIGN.md, "GC ladder").
+ * programs; real GC on wasm is future work.
  */
 #ifndef DYLAN_WASM_FAKE_GC_H
 #define DYLAN_WASM_FAKE_GC_H
