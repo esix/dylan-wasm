@@ -72,6 +72,7 @@ const env = {
   },
   host_throw(exc) { throw new DylanThrow(exc); },
   host_now_ns() { return BigInt(Math.floor(performance.now() * 1e6)); },
+  host_epoch_ms() { return BigInt(Date.now()); },
   // Open Dylan's exception object is a `struct dylan_bef`. Its layout
   // (from llvm-aarch64-darwin-runtime.h):
   //   bef_unwind_exception[4]  // 32 bytes (_Unwind_Exception)
@@ -99,6 +100,10 @@ const env = {
     return jsThrewValue;
   },
 };
+// libm routed to the host: exact, and float-to-string depends on log/pow
+// for digit-count estimates (wrong values make it allocate absurd buffers).
+for (const f of ['sin','cos','tan','asin','acos','atan','exp','log','pow','hypot'])
+  env['host_' + f] = Math[f];
 const imports = { env };
 
 const rows = items => items.map(([cls,k,v]) =>

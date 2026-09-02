@@ -50,6 +50,7 @@ const env = {
   },
   host_throw(exc) { throw new DylanThrow(exc); },
   host_now_ns() { return process.hrtime.bigint(); },
+  host_epoch_ms() { return BigInt(Date.now()); },
   __cxa_find_matching_catch_2()  { setTempRet0(0); return jsThrewValue; },
   __cxa_find_matching_catch_3(t) {
     if (jsThrewValue !== 0n) {
@@ -64,6 +65,11 @@ const env = {
     return jsThrewValue;
   },
 };
+// libm routed to the host: exact, and float-to-string depends on log/pow
+// for digit-count estimates (wrong values make it allocate absurd buffers).
+for (const f of ['sin','cos','tan','asin','acos','atan','exp','log','pow','hypot'])
+  env['host_' + f] = Math[f];
+
 let module;
 try {
   module = await WebAssembly.compile(readFileSync(wasmPath));

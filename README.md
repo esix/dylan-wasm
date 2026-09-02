@@ -35,7 +35,7 @@ Two repos, by design:
 |---|---|
 | `opendylan/` *(submodule, upstream pinned)* | Vanilla Open Dylan @ `3b2b904`. `setup.sh` patches it at build time. Submodule is configured `ignore = dirty` so the patched working tree doesn't appear as "modified content" in `git status`. |
 | `patches/opendylan-wasm.patch` | Our compiler changes: WebAssembly (wasm32/wasm64) LLVM back-end targets, default-sections fix, runtime ABI fixes, Apple-Silicon codesign fix, wasm build scripts + registries. Regenerate after editing the submodule with `patches/regen-patch.sh`. |
-| `runtime-wasm64/` | Freestanding wasm64 runtime shim + build scripts: `libc-shim.c`, `wasm-threads.c`, `fakegc/gc/gc.h`, `build-wasm64.sh` (link a runtime `.wasm`), `build-hello.sh` (link an executable), `rebuild-all.sh` (full rebuild), `run-hello.html`/`run-hello.mjs` (browser/node harness), `check-abi.sh` (C↔bitcode signature cross-check). |
+| `runtime-wasm64/` | Freestanding wasm64 runtime shim + build scripts: `libc-shim.c`, `wasm-threads.c`, `fakegc/gc/gc.h`, `build-wasm64.sh` (link a runtime `.wasm`), `build-hello.sh` (link an executable), `rebuild-all.sh` (full rebuild), `run-hello.html`/`run-hello.mjs` (browser/node harness), `ff-probe.html` (synchronous harness for `firefox --headless --screenshot` verification), `check-abi.sh` (C↔bitcode signature cross-check). |
 | `hello/` | Minimal Dylan test program (sources only). |
 | `examples.html` | Showcase of native example programs and their output. |
 | `setup.sh` | One-command build (bootstrap + apply patch + stage-1 compiler + wasm runtime). |

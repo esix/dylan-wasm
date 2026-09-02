@@ -21,6 +21,13 @@ static uintptr_t g_bump = 0;
 void *malloc(size_t n) {
   if (g_bump == 0) g_bump = (uintptr_t)&__heap_base;
   g_bump = (g_bump + 15u) & ~(uintptr_t)15u;       /* 16-byte align */
+  /* Trap HERE on exhaustion. Without this, a bogus huge request silently
+   * pushes g_bump past the end of linear memory and the next innocent
+   * small allocation OOB-faults instead, pointing debugging at the victim. */
+  if (n > __builtin_wasm_memory_size(0) * 65536ul - g_bump) {
+    report("[trap] bump allocator exhausted linear memory\n");
+    __builtin_trap();
+  }
   void *p = (void *)g_bump;
   g_bump += n;
   return p;
@@ -60,9 +67,20 @@ void *stderr = 0;
 void *stdout = 0;
 int  fprintf(void *stream, const char *fmt, ...) { (void)stream; (void)fmt; return 0; }
 
-/* ---------- math (refine later; Dylan float) ---------- */
-double pow(double x, double y)  { (void)y; return x; }
-float  powf(float x, float y)   { (void)y; return x; }
+/* ---------- math: routed to the host (Math.* — exact, free) ----------
+ * These are NOT optional stubs: float printing estimates digit counts via
+ * log/pow, so wrong values make float-to-string allocate absurd buffers. */
+#define HOST_MATH_1(name)                                              \
+  __attribute__((import_module("env"), import_name("host_" #name)))    \
+  extern double host_##name(double);                                   \
+  double name(double x)      { return host_##name(x); }                \
+  float  name##f(float x)    { return (float)host_##name(x); }
+#define HOST_MATH_2(name)                                              \
+  __attribute__((import_module("env"), import_name("host_" #name)))    \
+  extern double host_##name(double, double);                           \
+  double name(double x, double y)   { return host_##name(x, y); }      \
+  float  name##f(float x, float y)  { return (float)host_##name(x, y); }
+HOST_MATH_2(pow)
 
 /* ---------- threading: single-threaded no-ops ---------- */
 int pthread_mutex_lock(void *m)   { (void)m; return 0; }
@@ -239,16 +257,15 @@ double __floattidf(__int128 a) {
 }
 float  __floattisf(__int128 a) { return (float)__floattidf(a); }
 
-/* ---------- transcendental math: stubs (hello doesn't use them) ---------- */
-double acos(double x){return x;}  float acosf(float x){return x;}
-double asin(double x){return x;}  float asinf(float x){return x;}
-double atan(double x){return x;}  float atanf(float x){return x;}
-double cos(double x){return x;}   float cosf(float x){return x;}
-double sin(double x){return x;}   float sinf(float x){return x;}
-double tan(double x){return x;}   float tanf(float x){return x;}
-double exp(double x){return x;}   float expf(float x){return x;}
-double log(double x){return x;}   float logf(float x){return x;}
-double hypot(double x,double y){(void)y;return x;} float hypotf(float x,float y){(void)y;return x;}
+HOST_MATH_1(acos)
+HOST_MATH_1(asin)
+HOST_MATH_1(atan)
+HOST_MATH_1(cos)
+HOST_MATH_1(sin)
+HOST_MATH_1(tan)
+HOST_MATH_1(exp)
+HOST_MATH_1(log)
+HOST_MATH_2(hypot)
 
 /* ---------- output path: route POSIX write() through the host import ---------- */
 long write(int fd, const void *buf, unsigned long count) {
@@ -262,11 +279,17 @@ int   fsync(int fd)            { (void)fd; return 0; }
 int   isatty(int fd)           { (void)fd; return 1; }   /* claim a tty: unbuffered, no seeking */
 long  lseek(int fd, long off, int whence) { (void)fd;(void)off;(void)whence; return -1; }
 long  readlink(const char *p, char *b, unsigned long n) { (void)p;(void)b;(void)n; return -1; }
-/* time() and timer_get_point_in_time() use a host clock so simple-random
- * gets a real seed and simple-profiling reports real elapsed time. */
+/* Two host clocks, deliberately separate:
+ * - host_now_ns: monotonic (performance.now / hrtime), sub-µs — for the
+ *   `timing` macro via timer_get_point_in_time below.
+ * - host_epoch_ms: wall clock (Date.now) — for time(). Rounding the
+ *   monotonic clock here instead makes time() ≈ 0 in a browser (ms since
+ *   page load), which seeded simple-random with the same value every load. */
 __attribute__((import_module("env"), import_name("host_now_ns")))
 extern uint64_t host_now_ns(void);
-long  time(long *t)            { uint64_t s = host_now_ns() / 1000000000ULL; if (t) *t = (long)s; return (long)s; }
+__attribute__((import_module("env"), import_name("host_epoch_ms")))
+extern uint64_t host_epoch_ms(void);
+long  time(long *t)            { long s = (long)(host_epoch_ms() / 1000ULL); if (t) *t = s; return s; }
 
 /* ---------- Dylan io syscall wrappers (stubs; stdout is non-seekable) ---------- */
 int   io_errno(void)                 { return 0; }

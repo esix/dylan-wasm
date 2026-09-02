@@ -49,5 +49,6 @@ echo "## Linking hello.wasm..."
   exit 1
 }
 echo "   *** LINKED: $BUILD/hello.wasm ($(stat -f%z "$BUILD/hello.wasm") bytes) ***"
-# Stage the browser harness next to hello.wasm so the user can just serve $BUILD.
+# Stage the browser harnesses next to hello.wasm so the user can just serve $BUILD.
 cp "$SHIM/run-hello.html" "$BUILD/run-hello.html"
+cp "$SHIM/ff-probe.html"  "$BUILD/ff-probe.html"

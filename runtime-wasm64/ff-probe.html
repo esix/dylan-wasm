@@ -1,0 +1,80 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>ff-probe</title>
+<body style="background:#fff;color:#000;font:14px monospace">
+<pre id="out">FF-PROBE START</pre>
+<script>
+// Firefox-verification harness. Fully synchronous (sync XHR + new
+// WebAssembly.Module) so the wasm run finishes before the load event fires,
+// which lets plain `firefox --headless --screenshot out.png <url>` capture
+// the finished output — Firefox's screenshot mode has no way to wait for
+// async work. Serve the build dir, then:
+//   /Applications/Firefox.app/Contents/MacOS/firefox --headless \
+//     --screenshot /tmp/ff.png http://localhost:8731/.../ff-probe.html
+const out = document.getElementById('out');
+try {
+  const xhr = new XMLHttpRequest();
+  xhr.open('GET', 'hello.wasm', false);           // sync
+  xhr.overrideMimeType('text/plain; charset=x-user-defined');
+  xhr.send();
+  const raw = xhr.response || xhr.responseText;
+  let buf;
+  if (raw instanceof ArrayBuffer) { buf = raw; }
+  else {
+    buf = new ArrayBuffer(raw.length);
+    const u8 = new Uint8Array(buf);
+    for (let i = 0; i < raw.length; i++) u8[i] = raw.charCodeAt(i) & 0xff;
+  }
+  const module = new WebAssembly.Module(buf);
+  let memory, instance, threwAddr = 0, tempRet0Addr = 0, jsThrewValue = 0n;
+  const dec = new TextDecoder(); let dylanOut = '';
+  class DylanThrow extends Error { constructor(e){ super('d'); this.exc = e; } }
+  const makeInvoke = name => (...all) => {
+    try { return instance.exports.__indirect_function_table.get(all[0])(...all.slice(1)); }
+    catch (e) {
+      if (e instanceof DylanThrow) {
+        new Int32Array(memory.buffer)[threwAddr >>> 2] = 1;
+        jsThrewValue = e.exc;
+        return name[7] === 'v' ? undefined : 0n;
+      }
+      throw e;
+    }
+  };
+  const setT = v => { new Int32Array(memory.buffer)[tempRet0Addr >>> 2] = v | 0; };
+  const env = {
+    host_write(fd, ptr, len) { dylanOut += dec.decode(new Uint8Array(memory.buffer, Number(ptr), Number(len))); return BigInt(Number(len)); },
+    host_throw(e) { throw new DylanThrow(e); },
+    host_now_ns() { return BigInt(Math.floor(performance.now() * 1e6)); },
+    host_epoch_ms() { return BigInt(Date.now()); },
+    __cxa_find_matching_catch_2() { setT(0); return jsThrewValue; },
+    __cxa_find_matching_catch_3(t) {
+      if (jsThrewValue !== 0n) {
+        const tid = new BigUint64Array(memory.buffer)[(Number(jsThrewValue) + 40) >>> 3];
+        if (tid === t) { setT(Number(t) & 0xFFFFFFFF); return jsThrewValue; }
+      }
+      setT(0); return jsThrewValue;
+    },
+  };
+  for (const f of ['sin','cos','tan','asin','acos','atan','exp','log','pow','hypot'])
+    env['host_' + f] = Math[f];
+  for (const imp of WebAssembly.Module.imports(module))
+    if (imp.module === 'env' && imp.name.startsWith('invoke_') && !(imp.name in env))
+      env[imp.name] = makeInvoke(imp.name);
+  instance = new WebAssembly.Instance(module, { env });
+  const e = instance.exports; memory = e.memory;
+  threwAddr = Number(e.__THREW__?.value || 0n);
+  tempRet0Addr = Number(e.tempRet0?.value || 0n);
+  const args = ['hello', '50000'], argvBase = 0x10000000;
+  const u8 = new Uint8Array(memory.buffer), u64 = new BigUint64Array(memory.buffer);
+  const enc = new TextEncoder();
+  let sa = (argvBase + args.length * 8 + 7) & ~7;
+  args.forEach((a, i) => {
+    const b = enc.encode(a + '\0'); u8.set(b, sa);
+    u64[(argvBase >>> 3) + i] = BigInt(sa); sa = (sa + b.length + 7) & ~7;
+  });
+  const rc = e.main(args.length, BigInt(argvBase));
+  out.textContent = 'FF-PROBE OK rc=' + rc + '\n' + dylanOut;
+} catch (err) {
+  out.textContent = 'FF-PROBE FAIL: ' + err + '\n' + (err.stack || '').slice(0, 500);
+}
+</script>
