@@ -5,6 +5,11 @@ Module: hello
 //   1. quicksort        — opendylan/sources/examples/console/quicksort/
 //   2. towers-of-hanoi  — opendylan/sources/examples/console/towers-of-hanoi/
 //   3. factorial-big    — opendylan/sources/examples/console/factorial/
+// plus three demos written for this port, exercising float printing, the
+// host-libm transcendentals bridge, and generic-function dispatch:
+//   4. mandelbrot       — ASCII escape-time fractal, <double-float> arithmetic
+//   5. sin & cos wave   — transcendentals (sin/cos/sqrt, $double-pi) plot
+//   6. shapes           — class hierarchy + generic dispatch + closure sort
 
 format-out("===== Open Dylan examples — running in your browser =====\n\n");
 
@@ -239,8 +244,140 @@ define method factorial-demo () => ()
 end method factorial-demo;
 
 
+// =====================================================================
+// mandelbrot — escape-time fractal in ASCII, pure <double-float> arithmetic
+// =====================================================================
+
+define constant $mandel-max-iterations :: <integer> = 32;
+
+define function mandel-escape-count
+    (cr :: <double-float>, ci :: <double-float>) => (n :: <integer>)
+  let zr :: <double-float> = 0.0d0;
+  let zi :: <double-float> = 0.0d0;
+  let n :: <integer> = 0;
+  while (n < $mandel-max-iterations & zr * zr + zi * zi < 4.0d0)
+    let t = zr * zr - zi * zi + cr;
+    zi := 2.0d0 * zr * zi + ci;
+    zr := t;
+    n := n + 1;
+  end;
+  n
+end function mandel-escape-count;
+
+define method mandelbrot-demo () => ()
+  format-out("---- mandelbrot (escape-time, <double-float>) ----\n");
+  let gradient = " .:-=+*#%";
+  for (row from 0 below 22)
+    let ci = -1.15d0 + 2.3d0 * as(<double-float>, row) / 21.0d0;
+    for (col from 0 below 68)
+      let cr = -2.1d0 + 2.8d0 * as(<double-float>, col) / 67.0d0;
+      let n = mandel-escape-count(cr, ci);
+      format-out("%c",
+                 if (n >= $mandel-max-iterations) '@'
+                 else gradient[min(n, 8)] end);
+    end for;
+    format-out("\n");
+  end for;
+  format-out("\n");
+end method mandelbrot-demo;
+
+
+// =====================================================================
+// sine & cosine — transcendentals bridged to the host's libm
+// =====================================================================
+
+define method wave-demo () => ()
+  format-out("---- sin & cos (transcendentals via host libm) ----\n");
+  format-out("pi = %=   e = %=\n", $double-pi, $double-e);
+  format-out("sin(pi/6) = %=   cos(pi/3) = %=   sqrt(2) = %=\n\n",
+             sin($double-pi / 6.0d0), cos($double-pi / 3.0d0), sqrt(2.0d0));
+  for (i from 0 below 40)
+    let x = as(<double-float>, i) * $double-pi / 10.0d0;
+    let s-col = round(sin(x) * 18.0d0) + 19;
+    let c-col = round(cos(x) * 18.0d0) + 19;
+    for (col from 0 below 39)
+      format-out("%c",
+                 case
+                   col == s-col => '*';       // sine
+                   col == c-col => 'o';       // cosine
+                   col == 19    => '|';       // axis
+                   otherwise    => ' ';
+                 end);
+    end for;
+    format-out("\n");
+  end for;
+  format-out("        (* = sin, o = cos, two full periods top to bottom)\n\n");
+end method wave-demo;
+
+
+// =====================================================================
+// shapes — Dylan generic functions dispatching on class
+// =====================================================================
+
+define abstract class <shape> (<object>)
+  constant slot shape-name :: <byte-string>, required-init-keyword: name:;
+end class <shape>;
+
+define class <circle> (<shape>)
+  constant slot radius :: <double-float>, required-init-keyword: radius:;
+end class <circle>;
+
+define class <box> (<shape>)
+  constant slot box-width  :: <double-float>, required-init-keyword: width:;
+  constant slot box-height :: <double-float>, required-init-keyword: height:;
+end class <box>;
+
+define generic shape-area (s :: <shape>) => (area :: <double-float>);
+
+define method shape-area (c :: <circle>) => (area :: <double-float>)
+  $double-pi * c.radius * c.radius
+end method;
+
+define method shape-area (b :: <box>) => (area :: <double-float>)
+  b.box-width * b.box-height
+end method;
+
+// simple-format has no width directives (%-6s), so pad names by hand
+define function pad (s :: <byte-string>, n :: <integer>) => (p :: <byte-string>)
+  if (s.size >= n) s
+  else concatenate(s, make(<byte-string>, size: n - s.size, fill: ' ')) end
+end function pad;
+
+define generic describe (s :: <shape>) => ();
+
+define method describe (c :: <circle>) => ()
+  format-out("  circle %s r = %=", pad(c.shape-name, 6), c.radius);
+end method;
+
+define method describe (b :: <box>) => ()
+  format-out("  box    %s %= x %=", pad(b.shape-name, 6), b.box-width, b.box-height);
+end method;
+
+define method shapes-demo () => ()
+  format-out("---- shapes (generic-function dispatch) ----\n");
+  let shapes
+    = vector(make(<circle>, name: "coin",  radius: 0.012d0),
+             make(<box>,    name: "door",  width: 0.9d0, height: 2.1d0),
+             make(<circle>, name: "wheel", radius: 0.66d0),
+             make(<box>,    name: "tile",  width: 0.3d0, height: 0.3d0));
+  // sort by area, descending — `test:` takes a closure over shape-area
+  let sorted = sort(shapes,
+                    test: method (a :: <shape>, b :: <shape>)
+                            shape-area(a) > shape-area(b)
+                          end);
+  for (s :: <shape> in sorted)
+    describe(s);
+    format-out("   area = %=\n", shape-area(s));
+  end;
+  format-out("\n");
+end method shapes-demo;
+
+
 begin
   quicksort-demo();
   play-hanoi(5);
   factorial-demo();
+  mandelbrot-demo();
+  wave-demo();
+  shapes-demo();
 end;

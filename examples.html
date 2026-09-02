@@ -31,7 +31,7 @@
 <body>
 <div class="wrap">
   <h1>Dylan, compiled and running</h1>
-  <p class="sub">Three console programs built with Open Dylan and executed by the compiled runtime + GC.</p>
+  <p class="sub">Six Dylan programs built with Open Dylan and executed by the compiled runtime + GC — natively and live in your browser.</p>
 
   <div class="banner" style="border-color:#3fb950;color:#56d364">
     <b>Status:</b> Dylan now <b>runs in your browser</b> via wasm64. The
@@ -39,6 +39,9 @@
     instantiates it, and shows what its <code>format-out</code> produced — real
     <b>all three upstream examples — <code>quicksort</code>,
     <code>towers-of-hanoi</code>, and <code>factorial-big</code> — verbatim</b>,
+    plus <b>three demos written for this port</b> — an ASCII
+    <b>mandelbrot</b>, a <b>sin/cos wave</b> through the host-bridged libm,
+    and a <b>generic-dispatch shapes</b> demo —
     computed by the Dylan runtime in this tab, including real
     <code>random</code>-seeded benchmarks, real <code>timing</code> via
     <code>performance.now</code>, and real 128-bit <code>&lt;double-integer&gt;</code>
@@ -55,7 +58,7 @@
   <!-- live in-browser demo -->
   <div class="ex" style="border-color:#3fb950">
     <h2 style="color:#3fb950">live in your browser ✓</h2>
-    <p class="desc">All <b>three upstream Open Dylan examples</b> — <code>quicksort</code>, <code>towers-of-hanoi</code>, and <code>factorial-big</code> — compiled to wasm64 and executed by the Dylan runtime in your browser. Polymorphic <code>&lt;sequence&gt;</code> dispatch, <code>random()</code>, the <code>timing()</code> macro, <code>&lt;deque&gt;</code>, classes with <code>required-init-keyword</code>, generic methods with <code>next-method</code> and <code>#key</code>, <code>map</code>/<code>range</code>, and 128-bit <code>&lt;double-integer&gt;</code> arithmetic with overflow signaling a real <code>&lt;arithmetic-overflow-error&gt;</code> condition that the <code>exception (e :: &lt;error&gt;)</code> clause catches. Real GC, real method dispatch, real <code>format-out</code> through <code>host_write</code>, real NLX/conditions via the Emscripten-style EH bridge, real timing via <code>performance.now</code>.</p>
+    <p class="desc">All <b>three upstream Open Dylan examples</b> — <code>quicksort</code>, <code>towers-of-hanoi</code>, and <code>factorial-big</code> — plus <b>mandelbrot</b>, a <b>sin/cos wave</b> (host-bridged libm), and a <b>shapes dispatch demo</b>, compiled to wasm64 and executed by the Dylan runtime in your browser. Polymorphic <code>&lt;sequence&gt;</code> dispatch, <code>random()</code>, the <code>timing()</code> macro, <code>&lt;deque&gt;</code>, classes with <code>required-init-keyword</code>, generic methods with <code>next-method</code> and <code>#key</code>, <code>map</code>/<code>range</code>, and 128-bit <code>&lt;double-integer&gt;</code> arithmetic with overflow signaling a real <code>&lt;arithmetic-overflow-error&gt;</code> condition that the <code>exception (e :: &lt;error&gt;)</code> clause catches. Real GC, real method dispatch, real <code>format-out</code> through <code>host_write</code>, real NLX/conditions via the Emscripten-style EH bridge, real timing via <code>performance.now</code>.</p>
     <div class="label">Dylan source (in <code>hello/hello.dylan</code>)</div>
 <pre class="src"><span class="kw">define function</span> <span class="fn">fact</span> (n :: <span class="ty">&lt;integer&gt;</span>) =&gt; (r :: <span class="ty">&lt;integer&gt;</span>)
   <span class="kw">if</span> (n &lt;= 1) 1 <span class="kw">else</span> n * fact(n - 1) <span class="kw">end</span>
@@ -105,6 +108,7 @@ const env = {
   },
   host_throw(exc) { throw new DylanThrow(exc); },
   host_now_ns() { return BigInt(Math.floor(performance.now() * 1e6)); },
+  host_epoch_ms() { return BigInt(Date.now()); },
   // Compare thrown bef.bef_typeid (at exc+40) to the catch's typeinfo.
   // See run-hello.html for full commentary.
   __cxa_find_matching_catch_2()  { setTempRet0(0); return jsThrewValue; },
@@ -121,17 +125,22 @@ const env = {
     return jsThrewValue;
   },
 };
-['invoke_vj','invoke_vjjj','invoke_vjjjj','invoke_vjjjjj','invoke_vjjjjjj',
- 'invoke_vjjjjjjj','invoke_vjjjjjjjj','invoke_vjjjjjjjjj','invoke_vjjjjjjjjjj',
- 'invoke_jijj','invoke_jiji'].forEach(n => env[n] = makeInvoke(n));
+// libm routed to the host (float printing needs real log/pow for digit counts)
+for (const f of ['sin','cos','tan','asin','acos','atan','exp','log','pow','hypot'])
+  env['host_' + f] = Math[f];
 (async () => {
   const el = document.getElementById('live-out');
   try {
     const r = await fetch('opendylan/_build-wasm64/hello.wasm', {cache: 'no-store'});
     if (!r.ok) throw new Error('no hello.wasm — run setup.sh first');
     const buf = await r.arrayBuffer();
-    const { instance: inst } = await WebAssembly.instantiate(buf, { env });
-    instance = inst;
+    const module = await WebAssembly.compile(buf);
+    // Synthesize the invoke_* EH trampolines from the module's import list.
+    for (const imp of WebAssembly.Module.imports(module)) {
+      if (imp.module === 'env' && imp.name.startsWith('invoke_') && !(imp.name in env))
+        env[imp.name] = makeInvoke(imp.name);
+    }
+    instance = await WebAssembly.instantiate(module, { env });
     memory = instance.exports.memory;
     threwAddr   = Number(instance.exports.__THREW__?.value || 0n);
     tempRet0Addr = Number(instance.exports.tempRet0?.value || 0n);
@@ -219,6 +228,56 @@ Final position:
   Left:
   Middle: 5, 4, 3, 2, 1
   Right:</pre>
+  </div>
+
+  <!-- mandelbrot -->
+  <div class="ex">
+    <h2>mandelbrot <span style="color:#3fb950;font-weight:normal;font-size:.85rem">— live in the browser (rendered in the green card above)</span></h2>
+    <p class="desc">Escape-time fractal in ASCII — tight nested loops of pure <code>&lt;double-float&gt;</code> arithmetic in a typed local function, no libm needed.</p>
+    <div class="label">Dylan source</div>
+<pre class="src"><span class="kw">define function</span> <span class="fn">mandel-escape-count</span>
+    (cr :: <span class="ty">&lt;double-float&gt;</span>, ci :: <span class="ty">&lt;double-float&gt;</span>) =&gt; (n :: <span class="ty">&lt;integer&gt;</span>)
+  <span class="kw">let</span> zr :: <span class="ty">&lt;double-float&gt;</span> = 0.0d0;
+  <span class="kw">let</span> zi :: <span class="ty">&lt;double-float&gt;</span> = 0.0d0;
+  <span class="kw">let</span> n :: <span class="ty">&lt;integer&gt;</span> = 0;
+  <span class="kw">while</span> (n &lt; $mandel-max-iterations &amp; zr * zr + zi * zi &lt; 4.0d0)
+    <span class="kw">let</span> t = zr * zr - zi * zi + cr;
+    zi := 2.0d0 * zr * zi + ci;
+    zr := t;
+    n := n + 1;
+  <span class="kw">end</span>;
+  n
+<span class="kw">end function</span>;</pre>
+  </div>
+
+  <!-- sin & cos -->
+  <div class="ex">
+    <h2>sin &amp; cos wave <span style="color:#3fb950;font-weight:normal;font-size:.85rem">— live in the browser (plotted in the green card above)</span></h2>
+    <p class="desc">Two periods of sine and cosine plotted in ASCII. Dylan's <code>transcendentals</code> module (<code>sin</code>, <code>cos</code>, <code>sqrt</code>, <code>$double-pi</code>) — the calls cross the wasm boundary to the host's <code>Math.*</code>, and <code>sqrt</code> lowers to the native <code>f64.sqrt</code> instruction. Also a float-printing showcase: <code>sin(pi/6) = 0.5000000d0</code>, <code>sqrt(2) = 1.4142136d0</code>.</p>
+    <div class="label">Dylan source</div>
+<pre class="src"><span class="kw">for</span> (i <span class="kw">from</span> 0 <span class="kw">below</span> 40)
+  <span class="kw">let</span> x = as(<span class="ty">&lt;double-float&gt;</span>, i) * $double-pi / 10.0d0;
+  <span class="kw">let</span> s-col = round(sin(x) * 18.0d0) + 19;
+  <span class="kw">let</span> c-col = round(cos(x) * 18.0d0) + 19;
+  ...
+<span class="kw">end for</span>;</pre>
+  </div>
+
+  <!-- shapes -->
+  <div class="ex">
+    <h2>shapes <span style="color:#3fb950;font-weight:normal;font-size:.85rem">— live in the browser (listed in the green card above)</span></h2>
+    <p class="desc">A little class hierarchy — abstract <code>&lt;shape&gt;</code>, <code>&lt;circle&gt;</code>, <code>&lt;box&gt;</code> — with <code>area</code> and <code>describe</code> as generic functions dispatching on class, then sorted by area with a closure passed as <code>test:</code>.</p>
+    <div class="label">Dylan source</div>
+<pre class="src"><span class="kw">define generic</span> <span class="fn">shape-area</span> (s :: <span class="ty">&lt;shape&gt;</span>) =&gt; (area :: <span class="ty">&lt;double-float&gt;</span>);
+
+<span class="kw">define method</span> <span class="fn">shape-area</span> (c :: <span class="ty">&lt;circle&gt;</span>) =&gt; (area :: <span class="ty">&lt;double-float&gt;</span>)
+  $double-pi * c.radius * c.radius
+<span class="kw">end method</span>;
+
+<span class="kw">let</span> sorted = sort(shapes,
+                  test: <span class="kw">method</span> (a :: <span class="ty">&lt;shape&gt;</span>, b :: <span class="ty">&lt;shape&gt;</span>)
+                          shape-area(a) &gt; shape-area(b)
+                        <span class="kw">end</span>);</pre>
   </div>
 
   <footer>Open Dylan → native (above) and → wasm64 (boots in-browser). See <code>run-hello.html</code> for the live wasm dashboard.</footer>

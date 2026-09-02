@@ -12,4 +12,5 @@ define module hello
   use simple-format;
   use simple-random;
   use simple-profiling;
+  use transcendentals;
 end module;

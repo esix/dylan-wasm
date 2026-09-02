@@ -5,9 +5,11 @@ back-end.
 
 **Status:** Dylan programs **run in your browser** via wasm64. The included
 `hello` showcase — **all three upstream Open Dylan examples
-(`quicksort`, `towers-of-hanoi`, `factorial-big`) verbatim** — compiles to
-a ~5.7 MB `.wasm`, instantiates in Chrome / Firefox / node ≥ 24, and prints
-its output through `host_write`. Full Dylan runtime (GC, generic dispatch, streams,
+(`quicksort`, `towers-of-hanoi`, `factorial-big`) verbatim**, plus an ASCII
+**mandelbrot**, a **sin/cos wave** through the host-bridged libm, and a
+**generic-dispatch shapes** demo — compiles to a ~5.7 MB `.wasm`,
+instantiates in Chrome / Firefox / node ≥ 24, and prints its output through
+`host_write`. Full Dylan runtime (GC, generic dispatch, streams,
 `format-out`, **non-local-exit / conditions** via an Emscripten-style EH
 bridge, **`random`** seeded from a host clock, **`timing`** macro backed by
 `performance.now`, real **128-bit `<double-integer>` arithmetic** with
