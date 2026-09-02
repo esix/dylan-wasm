@@ -52,3 +52,5 @@ echo "   *** LINKED: $BUILD/hello.wasm ($(stat -f%z "$BUILD/hello.wasm") bytes) 
 # Stage the browser harnesses next to hello.wasm so the user can just serve $BUILD.
 cp "$SHIM/run-hello.html" "$BUILD/run-hello.html"
 cp "$SHIM/ff-probe.html"  "$BUILD/ff-probe.html"
+# Fail the build if any harness is missing an env import the module needs.
+"$SHIM/check-harness-imports.sh" "$BUILD/hello.wasm"
