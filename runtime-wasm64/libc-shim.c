@@ -52,6 +52,22 @@ void *memset(void *d, int c, size_t n) {
   for (size_t i = 0; i < n; i++) dd[i] = (unsigned char)c;
   return d;
 }
+/* opt -O2's loop-idiom pass rewrites hand-rolled scans in the Dylan bitcode
+ * into libcalls (strlen showed up first), so the freestanding shim must
+ * export them. no_builtin stops the same pass eating these definitions. */
+__attribute__((no_builtin)) size_t strlen(const char *s) {
+  size_t n = 0;
+  while (s[n]) n++;
+  return n;
+}
+__attribute__((no_builtin)) int memcmp(const void *a, const void *b, size_t n) {
+  const unsigned char *x = a, *y = b;
+  for (size_t i = 0; i < n; i++)
+    if (x[i] != y[i]) return x[i] < y[i] ? -1 : 1;
+  return 0;
+}
+int bcmp(const void *a, const void *b, size_t n) { return memcmp(a, b, n); }
+
 void *memmove(void *d, const void *s, size_t n) {
   unsigned char *dd = d; const unsigned char *ss = s;
   if (dd < ss) for (size_t i = 0; i < n; i++) dd[i] = ss[i];

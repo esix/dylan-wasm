@@ -27,16 +27,23 @@ done
 "$LLVM/clang" "${CFLAGS[@]}" "$SHIM/wasm-threads.c" -o "$OBJ/c__wasm-threads.o"
 "$LLVM/clang" "${CFLAGS[@]}" "$SHIM/libc-shim.c"    -o "$OBJ/c__libc-shim.o"
 
-echo "## Lowering Dylan bitcode (per-library prefix; only hello keeps its main)..."
+echo "## Lowering Dylan bitcode (opt -O2 then llc; per-library prefix; only hello keeps its main)..."
+# opt -O2 first: llc alone does no IR-level optimization (no inlining/SROA).
+# The native build gets these passes for free by compiling .bc with clang -O2
+# (posix-build.jam CCFLAGS) — mirror that here.
+lower() { # lower <in.bc> <out.o>
+  "$LLVM/opt" -O2 "$1" -o "$2.opt.bc"
+  "$LLVM/llc" -mtriple=wasm64-unknown-wasi --enable-emscripten-cxx-exceptions -filetype=obj -O2 "$2.opt.bc" -o "$2"
+}
 for L in dylan common-dylan io generic-arithmetic big-integers hello; do
   for bc in "$BUILD"/build/$L/*.bc; do
     base=$(basename "${bc%.bc}")
     # skip the library-level main for everything except the executable (hello)
     if [ "$base" = "_main" ] && [ "$L" != "hello" ]; then continue; fi
-    "$LLVM/llc" -mtriple=wasm64-unknown-wasi --enable-emscripten-cxx-exceptions -filetype=obj -O2 "$bc" -o "$OBJ/${L}__${base}.o"
+    lower "$bc" "$OBJ/${L}__${base}.o"
   done
 done
-"$LLVM/llc" -mtriple=wasm64-unknown-wasi --enable-emscripten-cxx-exceptions -filetype=obj -O2 "$GEN/wasm64-wasi-runtime.bc" -o "$OBJ/generated-runtime.o"
+lower "$GEN/wasm64-wasi-runtime.bc" "$OBJ/generated-runtime.o"
 
 echo "## Linking hello.wasm..."
 # 64KB default shadow stack is far too small for the Dylan runtime; give it 32MB.
