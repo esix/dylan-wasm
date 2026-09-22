@@ -10,7 +10,10 @@
 // the finished output — Firefox's screenshot mode has no way to wait for
 // async work. Serve the build dir, then:
 //   /Applications/Firefox.app/Contents/MacOS/firefox --headless \
+//     --profile "$(mktemp -d)" \
 //     --screenshot /tmp/ff.png http://localhost:8731/.../ff-probe.html
+// (--profile bypasses the single-instance lock: without it the command
+// silently does nothing whenever a normal Firefox window is already open.)
 const out = document.getElementById('out');
 try {
   const xhr = new XMLHttpRequest();

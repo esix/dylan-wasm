@@ -17,8 +17,9 @@ hello/_build/
 *.wasm
 runtime-wasm64/**/obj/
 
-# playwright artifacts
+# tool/agent state
 .playwright-mcp/
+.serena/
 
 # screenshots
 *.png
